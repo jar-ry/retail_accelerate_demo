@@ -1,0 +1,296 @@
+name: baby_mart_category_intelligence
+description: |
+  Semantic model for Baby Mart category management and supplier negotiation.
+  Covers sell-through performance, customer lifetime value, promotional effectiveness,
+  competitive pricing, and brand switching dynamics.
+
+tables:
+  - name: BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+    description: Weekly sell-through metrics by supplier, brand, category, class, and store
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_SELLTHROUGH_WEEKLY
+    dimensions:
+      - name: supplier_name
+        description: Supplier company name
+        expr: SUPPLIER_NAME
+      - name: brand_name
+        description: Product brand name
+        expr: BRAND_NAME
+      - name: category
+        description: "Product category (Prams & Strollers, Car Seats, Nappies & Wipes, Clothing, Feeding)"
+        expr: CATEGORY
+      - name: class
+        description: Product sub-category class
+        expr: CLASS
+      - name: store_name
+        description: Retail store name
+        expr: STORE_NAME
+      - name: state
+        description: "Australian state (VIC, NSW, QLD, SA, WA, TAS, ACT, NT)"
+        expr: STATE
+      - name: region
+        description: "Store region type (Metro, Regional, CBD)"
+        expr: REGION
+      - name: fiscal_week
+        description: Fiscal week number
+        expr: FISCAL_WEEK
+      - name: fiscal_year
+        description: Fiscal year (July-June)
+        expr: FISCAL_YEAR
+      - name: fiscal_quarter
+        description: Fiscal quarter
+        expr: FISCAL_QUARTER
+    measures:
+      - name: total_units_sold
+        description: Total units sold
+        expr: UNITS_SOLD
+        default_aggregation: sum
+      - name: total_revenue
+        description: Total net revenue in AUD
+        expr: REVENUE
+        default_aggregation: sum
+      - name: total_margin
+        description: Total margin in AUD
+        expr: MARGIN
+        default_aggregation: sum
+      - name: avg_sell_through_rate
+        description: Average sell-through rate (units sold / available stock)
+        expr: SELL_THROUGH_RATE
+        default_aggregation: avg
+      - name: avg_weeks_of_cover
+        description: Average weeks of cover (SOH / weekly rate of sale)
+        expr: WEEKS_OF_COVER
+        default_aggregation: avg
+      - name: avg_rate_of_sale
+        description: Average rate of sale (units per store per week)
+        expr: RATE_OF_SALE
+        default_aggregation: avg
+
+  - name: BABY_MART_DEMO.ANALYTICS.DT_CLV_BY_BRAND
+    description: Customer lifetime value metrics by category and brand
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_CLV_BY_BRAND
+    dimensions:
+      - name: category
+        description: Product category
+        expr: CATEGORY
+      - name: brand_name
+        description: Brand name
+        expr: BRAND_NAME
+    measures:
+      - name: avg_clv
+        description: Average customer lifetime value in AUD
+        expr: AVG_CLV
+        default_aggregation: avg
+      - name: median_clv
+        description: Median customer lifetime value in AUD
+        expr: MEDIAN_CLV
+        default_aggregation: avg
+      - name: customer_count
+        description: Number of distinct customers
+        expr: CUSTOMER_COUNT
+        default_aggregation: sum
+      - name: avg_transactions
+        description: Average number of transactions per customer
+        expr: AVG_TRANSACTIONS
+        default_aggregation: avg
+
+  - name: BABY_MART_DEMO.ANALYTICS.DT_BRAND_SWITCHING
+    description: Brand switching dynamics showing customer flow between brands
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_BRAND_SWITCHING
+    dimensions:
+      - name: category
+        description: Product category
+        expr: CATEGORY
+      - name: class
+        description: Product class
+        expr: CLASS
+      - name: from_brand
+        description: Brand the customer switched FROM
+        expr: FROM_BRAND
+      - name: to_brand
+        description: Brand the customer switched TO
+        expr: TO_BRAND
+    measures:
+      - name: switch_count
+        description: Number of customers who switched
+        expr: SWITCH_COUNT
+        default_aggregation: sum
+      - name: switching_customer_count
+        description: Distinct customers who switched
+        expr: CUSTOMER_COUNT
+        default_aggregation: sum
+
+  - name: BABY_MART_DEMO.ANALYTICS.DT_PROMOTIONAL_EFFECTIVENESS
+    description: Promotional performance by mechanic type and brand
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_PROMOTIONAL_EFFECTIVENESS
+    dimensions:
+      - name: promotion_name
+        description: Name of the promotion
+        expr: PROMOTION_NAME
+      - name: mechanic
+        description: "Promotion mechanic type (% Off, Bundle, GWP, BOGO, Multi-buy)"
+        expr: MECHANIC
+      - name: brand_name
+        description: Brand name
+        expr: BRAND_NAME
+      - name: category
+        description: Product category
+        expr: CATEGORY
+    measures:
+      - name: promo_units
+        description: Units sold during promotion
+        expr: PROMO_UNITS
+        default_aggregation: sum
+      - name: promo_revenue
+        description: Revenue during promotion
+        expr: PROMO_REVENUE
+        default_aggregation: sum
+      - name: total_discount
+        description: Total discount given
+        expr: TOTAL_DISCOUNT
+        default_aggregation: sum
+      - name: promo_margin
+        description: Margin during promotion
+        expr: PROMO_MARGIN
+        default_aggregation: sum
+
+  - name: BABY_MART_DEMO.ANALYTICS.DT_COMPETITIVE_POSITION
+    description: Competitor pricing and price gap analysis
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_COMPETITIVE_POSITION
+    dimensions:
+      - name: product_name
+        description: Product name
+        expr: PRODUCT_NAME
+      - name: brand_name
+        description: Brand name
+        expr: BRAND_NAME
+      - name: category
+        description: Product category
+        expr: CATEGORY
+      - name: competitor_name
+        description: "Competitor retailer (Coles, Woolworths, Amazon AU, Chemist Warehouse)"
+        expr: COMPETITOR_NAME
+      - name: fiscal_week
+        description: Fiscal week
+        expr: FISCAL_WEEK
+      - name: fiscal_year
+        description: Fiscal year
+        expr: FISCAL_YEAR
+    measures:
+      - name: avg_competitor_price
+        description: Average competitor price
+        expr: AVG_COMPETITOR_PRICE
+        default_aggregation: avg
+      - name: avg_our_price
+        description: Our average selling price
+        expr: AVG_OUR_PRICE
+        default_aggregation: avg
+      - name: avg_price_gap_pct
+        description: Average price gap percentage (positive = we are more expensive)
+        expr: AVG_PRICE_GAP_PCT
+        default_aggregation: avg
+
+  - name: BABY_MART_DEMO.ANALYTICS.DT_CUSTOMER_SEGMENT_PERFORMANCE
+    description: Customer segment performance by supplier and brand
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_CUSTOMER_SEGMENT_PERFORMANCE
+    dimensions:
+      - name: supplier_name
+        description: Supplier name
+        expr: SUPPLIER_NAME
+      - name: brand_name
+        description: Brand name
+        expr: BRAND_NAME
+      - name: segment_name
+        description: "Customer segment (First-time Parents, Second-time Parents, Gift Buyers, Grandparents, Expecting, Registry Shoppers)"
+        expr: SEGMENT_NAME
+      - name: fiscal_year
+        description: Fiscal year
+        expr: FISCAL_YEAR
+      - name: fiscal_quarter
+        description: Fiscal quarter
+        expr: FISCAL_QUARTER
+    measures:
+      - name: segment_customer_count
+        description: Number of customers in segment purchasing this brand
+        expr: CUSTOMER_COUNT
+        default_aggregation: sum
+      - name: segment_revenue
+        description: Revenue from this segment for this brand
+        expr: REVENUE
+        default_aggregation: sum
+      - name: segment_units
+        description: Units purchased by this segment
+        expr: UNITS
+        default_aggregation: sum
+      - name: segment_avg_items_per_txn
+        description: Average items per transaction for this segment
+        expr: AVG_ITEMS_PER_TXN
+        default_aggregation: avg
+
+verified_queries:
+  - question: "What is the CLV for Huggies customers vs category average?"
+    sql: |
+      SELECT brand_name, AVG(avg_clv) as avg_customer_clv, SUM(customer_count) as customers
+      FROM BABY_MART_DEMO.ANALYTICS.DT_CLV_BY_BRAND
+      WHERE category = 'Nappies & Wipes'
+      GROUP BY brand_name
+      ORDER BY avg_customer_clv DESC
+
+  - question: "Which promotion mechanics have the best ROI for Huggies?"
+    sql: |
+      SELECT mechanic, SUM(promo_revenue) as revenue, SUM(total_discount) as discount_cost,
+             SUM(promo_margin) as margin, SUM(promo_revenue) / NULLIF(SUM(total_discount), 0) as roi
+      FROM BABY_MART_DEMO.ANALYTICS.DT_PROMOTIONAL_EFFECTIVENESS
+      WHERE brand_name = 'Huggies'
+      GROUP BY mechanic
+      ORDER BY roi DESC
+
+  - question: "How does our Huggies pricing compare to competitors?"
+    sql: |
+      SELECT competitor_name, AVG(avg_competitor_price) as their_price,
+             AVG(avg_our_price) as our_price, AVG(avg_price_gap_pct) as gap_pct
+      FROM BABY_MART_DEMO.ANALYTICS.DT_COMPETITIVE_POSITION
+      WHERE brand_name = 'Huggies' AND fiscal_year = 2026
+      GROUP BY competitor_name
+      ORDER BY gap_pct DESC
+
+  - question: "Which brands are gaining and losing customers in the pram category?"
+    sql: |
+      SELECT to_brand, SUM(switch_count) as gained_customers
+      FROM BABY_MART_DEMO.ANALYTICS.DT_BRAND_SWITCHING
+      WHERE category = 'Prams & Strollers'
+      GROUP BY to_brand
+      ORDER BY gained_customers DESC
+
+  - question: "How is Bugaboo performing by state this quarter?"
+    sql: |
+      SELECT state, SUM(units_sold) as units, SUM(revenue) as revenue, AVG(rate_of_sale) as ros
+      FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+      WHERE supplier_name = 'Bugaboo Australia' AND fiscal_year = 2026 AND fiscal_quarter = 3
+      GROUP BY state
+      ORDER BY revenue DESC
+
+  - question: "Which customer segment has the highest penetration for Bugaboo?"
+    sql: |
+      SELECT segment_name, SUM(customer_count) as customers, SUM(revenue) as revenue
+      FROM BABY_MART_DEMO.ANALYTICS.DT_CUSTOMER_SEGMENT_PERFORMANCE
+      WHERE brand_name = 'Bugaboo' AND fiscal_year = 2026
+      GROUP BY segment_name
+      ORDER BY customers DESC

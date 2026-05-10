@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baby Mart Supplier Portal — Native App (Streamlit)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Source Sans 3', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] } } } }
+    </script>
+    <style>
+        body { font-family: 'Source Sans 3', sans-serif; background: #0E1117; color: #FAFAFA; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .st-sidebar { background: #262730; }
+        .st-card { background: #1E1E2E; border: 1px solid #333344; border-radius: 8px; }
+        .st-metric { background: #1E1E2E; border: 1px solid #333344; border-radius: 8px; padding: 16px; }
+        .st-tab.active { border-bottom: 3px solid #FF4B4B; color: white; }
+        .st-tab { color: #808495; cursor: pointer; padding: 8px 16px; }
+        .st-tab:hover { color: #FAFAFA; }
+        .st-button { background: #FF4B4B; color: white; border-radius: 6px; padding: 6px 16px; font-size: 14px; font-weight: 500; }
+        .st-button:hover { background: #FF6B6B; }
+        .st-select { background: #262730; border: 1px solid #444455; border-radius: 6px; color: #FAFAFA; padding: 6px 12px; font-size: 14px; }
+        .st-info { background: rgba(28, 131, 225, 0.1); border-left: 4px solid #1C83E1; padding: 12px 16px; border-radius: 0 6px 6px 0; }
+        .chat-bubble-ai { background: #262730; border: 1px solid #333344; }
+        .chat-bubble-user { background: #1C83E1; }
+        .native-app-banner { background: linear-gradient(135deg, #1C83E1 0%, #6C3AED 100%); }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Streamlit-style Sidebar -->
+        <aside class="w-72 st-sidebar flex flex-col border-r border-gray-800">
+            <!-- Native App Identity -->
+            <div class="p-5 border-b border-gray-700">
+                <div class="native-app-banner rounded-lg p-3 mb-3">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        <span class="text-white text-sm font-semibold">Native App</span>
+                    </div>
+                    <div class="text-blue-100 text-xs mt-1">Installed from Baby Mart</div>
+                </div>
+                <div class="text-white font-bold text-lg">Supplier Portal</div>
+                <div class="text-gray-400 text-xs mt-1">Sellthrough Intelligence</div>
+                <div class="mt-3 space-y-1.5">
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                        <span class="text-gray-300">Streamlit Dashboards</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                        <span class="text-gray-300">Cortex Agent (AI Analyst)</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                        <span class="text-gray-300">Semantic View (NL Queries)</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                        <span class="text-gray-300">Shared Data (Zero-copy)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Supplier Context -->
+            <div class="p-4 border-b border-gray-700">
+                <label class="text-xs text-gray-400 font-medium">Supplier</label>
+                <select class="st-select w-full mt-1">
+                    <option>Bugaboo</option>
+                </select>
+                <label class="text-xs text-gray-400 font-medium mt-3 block">Category</label>
+                <select class="st-select w-full mt-1">
+                    <option>All Categories</option>
+                    <option>Prams & Strollers</option>
+                </select>
+                <label class="text-xs text-gray-400 font-medium mt-3 block">Period</label>
+                <select class="st-select w-full mt-1">
+                    <option>Last 4 Weeks</option>
+                    <option>Last 8 Weeks</option>
+                    <option>YTD</option>
+                </select>
+            </div>
+
+            <!-- Data Source Info -->
+            <div class="p-4 mt-auto border-t border-gray-700">
+                <div class="st-info text-xs">
+                    <div class="text-blue-300 font-medium">Live Data via Snowflake</div>
+                    <div class="text-blue-200 mt-0.5">Shared from Baby Mart | Zero-copy</div>
+                    <div class="text-blue-200">Last refresh: 2 min ago</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-6">
+            <!-- Page Tabs (Streamlit-style) -->
+            <div class="flex gap-0 border-b border-gray-700 mb-6">
+                <div class="st-tab active" onclick="showTab('sellthrough')">Sellthrough</div>
+                <div class="st-tab" onclick="showTab('segments')">Customer Segments</div>
+                <div class="st-tab" onclick="showTab('switching')">Brand Switching</div>
+                <div class="st-tab" onclick="showTab('comms')">AI Comms</div>
+            </div>
+
+            <!-- Sellthrough Tab -->
+            <div id="tab-sellthrough" class="tab-content">
+                <!-- KPI Metrics Row -->
+                <div class="grid grid-cols-5 gap-3 mb-6">
+                    <div class="st-metric">
+                        <div class="text-xs text-gray-400">Units Sold</div>
+                        <div class="font-mono text-2xl font-bold text-white mt-1">12,847</div>
+                        <div class="text-emerald-400 text-sm mt-1">+8.3% vs LW</div>
+                    </div>
+                    <div class="st-metric">
+                        <div class="text-xs text-gray-400">Revenue</div>
+                        <div class="font-mono text-2xl font-bold text-white mt-1">$2.14M</div>
+                        <div class="text-emerald-400 text-sm mt-1">+12.1% vs LY</div>
+                    </div>
+                    <div class="st-metric">
+                        <div class="text-xs text-gray-400">Sell-Through Rate</div>
+                        <div class="font-mono text-2xl font-bold text-white mt-1">68.4%</div>
+                        <div class="text-emerald-400 text-sm mt-1">+2.1pp</div>
+                    </div>
+                    <div class="st-metric">
+                        <div class="text-xs text-gray-400">Weeks of Cover</div>
+                        <div class="font-mono text-2xl font-bold text-amber-400 mt-1">6.2</div>
+                        <div class="text-amber-400 text-sm mt-1">VIC critical (3.1)</div>
+                    </div>
+                    <div class="st-metric">
+                        <div class="text-xs text-gray-400">Rate of Sale</div>
+                        <div class="font-mono text-2xl font-bold text-white mt-1">4.2/wk</div>
+                        <div class="text-emerald-400 text-sm mt-1">+0.6 vs LW</div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="col-span-2 st-card p-4">
+                        <div class="text-sm font-semibold text-white mb-3">Weekly Sell-Through Trend</div>
+                        <div id="sellthroughChart" style="height: 240px;"></div>
+                    </div>
+                    <div class="st-card p-4">
+                        <div class="text-sm font-semibold text-white mb-3">Weeks of Cover by State</div>
+                        <div id="wocChart" style="height: 240px;"></div>
+                    </div>
+                </div>
+
+                <!-- Regional Table -->
+                <div class="st-card p-4">
+                    <div class="text-sm font-semibold text-white mb-3">Regional Drilldown</div>
+                    <table class="w-full text-sm">
+                        <thead><tr class="border-b border-gray-700"><th class="text-left py-2 text-xs text-gray-400">Region</th><th class="text-right py-2 text-xs text-gray-400">Units</th><th class="text-right py-2 text-xs text-gray-400">Revenue</th><th class="text-right py-2 text-xs text-gray-400">ST Rate</th><th class="text-right py-2 text-xs text-gray-400">WOC</th><th class="text-right py-2 text-xs text-gray-400">vs Plan</th></tr></thead>
+                        <tbody class="text-gray-200">
+                            <tr class="border-b border-gray-800"><td class="py-2.5">VIC</td><td class="text-right font-mono">4,521</td><td class="text-right font-mono">$782K</td><td class="text-right font-mono">72.1%</td><td class="text-right font-mono text-red-400 font-bold">3.1</td><td class="text-right text-red-400 font-mono">-8%</td></tr>
+                            <tr class="border-b border-gray-800"><td class="py-2.5">NSW</td><td class="text-right font-mono">3,892</td><td class="text-right font-mono">$654K</td><td class="text-right font-mono">66.8%</td><td class="text-right font-mono">5.8</td><td class="text-right text-emerald-400 font-mono">+3%</td></tr>
+                            <tr class="border-b border-gray-800"><td class="py-2.5">QLD</td><td class="text-right font-mono">2,156</td><td class="text-right font-mono">$348K</td><td class="text-right font-mono">64.2%</td><td class="text-right font-mono">7.2</td><td class="text-right text-emerald-400 font-mono">+5%</td></tr>
+                            <tr class="border-b border-gray-800"><td class="py-2.5">SA</td><td class="text-right font-mono">1,204</td><td class="text-right font-mono">$198K</td><td class="text-right font-mono">58.3%</td><td class="text-right font-mono text-amber-400 font-bold">14.2</td><td class="text-right text-emerald-400 font-mono">+12%</td></tr>
+                            <tr><td class="py-2.5">WA</td><td class="text-right font-mono">1,074</td><td class="text-right font-mono">$158K</td><td class="text-right font-mono">62.7%</td><td class="text-right font-mono">8.4</td><td class="text-right text-emerald-400 font-mono">+1%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Brand Switching Tab (hidden by default) -->
+            <div id="tab-switching" class="tab-content hidden">
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    <div class="st-metric"><div class="text-xs text-gray-400">Switch-In Rate</div><div class="font-mono text-2xl font-bold text-emerald-400 mt-1">12.4%</div><div class="text-gray-400 text-sm mt-1">Acquired from other brands</div></div>
+                    <div class="st-metric"><div class="text-xs text-gray-400">Switch-Out Rate</div><div class="font-mono text-2xl font-bold text-red-400 mt-1">18.2%</div><div class="text-gray-400 text-sm mt-1">Lost to other brands</div></div>
+                    <div class="st-metric"><div class="text-xs text-gray-400">Net Position</div><div class="font-mono text-2xl font-bold text-red-400 mt-1">-5.8%</div><div class="text-gray-400 text-sm mt-1">Net loss (Uppababy gaining)</div></div>
+                </div>
+                <div class="st-card p-4">
+                    <div class="text-sm font-semibold text-white mb-3">Brand Switching Flow — Premium Prams</div>
+                    <div id="sankeyChart" style="height: 400px;"></div>
+                </div>
+            </div>
+
+            <!-- AI Comms Tab (hidden by default) -->
+            <div id="tab-comms" class="tab-content hidden">
+                <div class="grid grid-cols-5 gap-6">
+                    <div class="col-span-3 st-card flex flex-col" style="height: 550px;">
+                        <div class="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+                            <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                            <span class="text-sm font-semibold text-white">Cortex Agent</span>
+                            <span class="text-[9px] bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded ml-1 font-medium">IN-APP</span>
+                            <span class="text-[9px] text-gray-500 ml-auto">Powered by Semantic View</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                            <div class="flex gap-3">
+                                <div class="w-7 h-7 rounded-full bg-blue-900 flex-shrink-0 flex items-center justify-center"><svg class="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+                                <div class="chat-bubble-ai rounded-lg px-4 py-3 max-w-lg">
+                                    <p class="text-sm text-white font-medium">Weekly Summary — Bugaboo (W/C 28 Apr 2026)</p>
+                                    <ul class="mt-2 text-sm text-gray-300 space-y-1 list-disc list-inside">
+                                        <li>Sell-through: <span class="font-mono text-emerald-400">+15%</span> vs LW nationally</li>
+                                        <li>Melbourne: <span class="font-mono text-red-400">-8%</span> vs plan (flag)</li>
+                                        <li>Adelaide: <span class="font-mono text-amber-400">14 WOC</span> — transfer 20 units to Melbourne (3 WOC)</li>
+                                    </ul>
+                                    <p class="mt-2 text-sm text-gray-300"><strong class="text-white">PO Recommendation:</strong> Reduce PO #4521 (Dragonfly) by 30%.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 justify-end">
+                                <div class="chat-bubble-user rounded-lg px-4 py-3 max-w-lg"><p class="text-sm text-white">Why is Melbourne underperforming?</p></div>
+                            </div>
+                            <div class="flex gap-3">
+                                <div class="w-7 h-7 rounded-full bg-blue-900 flex-shrink-0 flex items-center justify-center"><svg class="w-4 h-4 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></div>
+                                <div class="chat-bubble-ai rounded-lg px-4 py-3 max-w-lg">
+                                    <p class="text-sm text-gray-300">Melbourne underperformance driven by:</p>
+                                    <ol class="mt-2 text-sm text-gray-300 space-y-1 list-decimal list-inside">
+                                        <li><strong class="text-white">Foot traffic:</strong> -22% at CBD store (construction)</li>
+                                        <li><strong class="text-white">Competition:</strong> Uppababy Ridge V2 launched at David Jones — $200 below Fox 5</li>
+                                    </ol>
+                                    <p class="mt-2 text-sm text-gray-300"><strong class="text-white">Recommendation:</strong> Bundle offer (Fox 5 + bassinet) or redirect marketing to Chadstone.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="px-4 py-3 border-t border-gray-700 flex gap-2">
+                            <input type="text" placeholder="Ask about your performance..." class="flex-1 text-sm bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <button class="st-button">Send</button>
+                        </div>
+                    </div>
+                    <div class="col-span-2 space-y-4">
+                        <div class="st-card p-4">
+                            <div class="text-sm font-semibold text-white mb-3">PO Adjustments Required</div>
+                            <div class="space-y-2">
+                                <div class="p-3 bg-red-900/30 border border-red-800 rounded-lg flex justify-between items-center">
+                                    <div><div class="text-sm text-red-300 font-medium">PO #4521 — Dragonfly</div><div class="text-xs text-red-400">20 WOC projected</div></div>
+                                    <span class="font-mono text-red-300 font-bold">-30%</span>
+                                </div>
+                                <div class="p-3 bg-amber-900/30 border border-amber-800 rounded-lg flex justify-between items-center">
+                                    <div><div class="text-sm text-amber-300 font-medium">PO #4533 — Fox 5 (VIC)</div><div class="text-xs text-amber-400">3 WOC — stockout risk</div></div>
+                                    <span class="font-mono text-emerald-300 font-bold">+40%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="st-card p-4">
+                            <div class="text-sm font-semibold text-white mb-3">Stock Rebalancing</div>
+                            <div class="p-3 bg-blue-900/30 border border-blue-800 rounded-lg flex items-center gap-2">
+                                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                <span class="text-sm text-blue-200">Transfer <span class="font-mono font-bold text-white">20 units</span> Fox 5: Adelaide (14 WOC) → Melbourne (3 WOC)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Segments Tab (hidden) -->
+            <div id="tab-segments" class="tab-content hidden">
+                <div class="st-card p-4 mb-4">
+                    <div class="text-sm font-semibold text-white mb-3">Segment Penetration — Bugaboo vs Category Average</div>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3"><div class="w-32 text-xs text-gray-400">First-time Parents</div><div class="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden relative"><div class="absolute inset-y-0 left-0 bg-blue-900 rounded-full" style="width:35%"></div><div class="absolute inset-y-0 left-0 bg-blue-500 rounded-full" style="width:45%"></div></div><span class="font-mono text-xs text-blue-400 w-10">45%</span></div>
+                        <div class="flex items-center gap-3"><div class="w-32 text-xs text-gray-400">Gift Buyers</div><div class="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden relative"><div class="absolute inset-y-0 left-0 bg-blue-900 rounded-full" style="width:12%"></div><div class="absolute inset-y-0 left-0 bg-blue-500 rounded-full" style="width:20%"></div></div><span class="font-mono text-xs text-blue-400 w-10">20%</span></div>
+                        <div class="flex items-center gap-3"><div class="w-32 text-xs text-gray-400">Grandparents</div><div class="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden relative"><div class="absolute inset-y-0 left-0 bg-blue-900 rounded-full" style="width:10%"></div><div class="absolute inset-y-0 left-0 bg-blue-500 rounded-full" style="width:18%"></div></div><span class="font-mono text-xs text-blue-400 w-10">18%</span></div>
+                        <div class="flex items-center gap-3"><div class="w-32 text-xs text-gray-400">Second-time</div><div class="flex-1 h-5 bg-gray-800 rounded-full overflow-hidden relative"><div class="absolute inset-y-0 left-0 bg-blue-900 rounded-full" style="width:25%"></div><div class="absolute inset-y-0 left-0 bg-blue-500 rounded-full" style="width:12%"></div></div><span class="font-mono text-xs text-red-400 w-10">12%</span></div>
+                    </div>
+                    <div class="mt-3 flex gap-4 text-[10px] text-gray-500"><span class="flex items-center gap-1"><span class="w-3 h-2 bg-blue-500 rounded-sm"></span> Bugaboo</span><span class="flex items-center gap-1"><span class="w-3 h-2 bg-blue-900 rounded-sm"></span> Category Avg</span></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            document.querySelectorAll('.st-tab').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const weeks = ['W1','W2','W3','W4','W5','W6','W7','W8','W9','W10','W11','W12'];
+            const layout = { margin: { t: 10, b: 30, l: 50, r: 20 }, xaxis: { tickfont: { size: 10, color: '#808495' }, gridcolor: '#333344' }, yaxis: { tickfont: { size: 10, family: 'JetBrains Mono', color: '#808495' }, gridcolor: '#333344' }, showlegend: false, plot_bgcolor: 'transparent', paper_bgcolor: 'transparent' };
+
+            Plotly.newPlot('sellthroughChart', [
+                { x: weeks, y: [9200,9800,10100,9500,10800,11200,10900,11500,12100,11800,12400,12847], type: 'scatter', mode: 'lines+markers', line: { color: '#3B82F6', width: 2.5 }, marker: { size: 5 } },
+                { x: weeks, y: [8100,8400,8800,8500,9200,9400,9100,9800,10200,10400,10800,11000], type: 'scatter', mode: 'lines', line: { color: '#4B5563', width: 2, dash: 'dot' } }
+            ], layout, { responsive: true, displayModeBar: false });
+
+            Plotly.newPlot('wocChart', [{ x: ['VIC','NSW','QLD','WA','SA'], y: [3.1, 5.8, 7.2, 8.4, 14.2], type: 'bar', marker: { color: ['#EF4444','#10B981','#10B981','#F59E0B','#EF4444'] } }], { ...layout, shapes: [{ type: 'line', x0: -0.5, x1: 4.5, y0: 4, y1: 4, line: { color: '#EF4444', width: 1, dash: 'dash' } }, { type: 'line', x0: -0.5, x1: 4.5, y0: 10, y1: 10, line: { color: '#F59E0B', width: 1, dash: 'dash' } }] }, { responsive: true, displayModeBar: false });
+
+            Plotly.newPlot('sankeyChart', [{ type: 'sankey', orientation: 'h', node: { pad: 20, thickness: 20, line: { color: '#333344', width: 0.5 }, label: ['Silver Cross', 'Mountain Buggy', 'Babyzen', 'Bugaboo', 'Uppababy', 'Babyzen (out)', 'Silver Cross (out)'], color: ['#6B7280','#6B7280','#6B7280','#3B82F6','#EF4444','#F59E0B','#6B7280'], x: [0.01,0.01,0.01,0.5,0.99,0.99,0.99], y: [0.1,0.5,0.9,0.5,0.2,0.6,0.9] }, link: { source: [0,1,2,3,3,3], target: [3,3,3,4,5,6], value: [120,84,52,182,78,41], color: ['rgba(16,185,129,0.3)','rgba(16,185,129,0.3)','rgba(16,185,129,0.3)','rgba(239,68,68,0.3)','rgba(245,158,11,0.3)','rgba(107,114,128,0.2)'] } }], { margin: { t: 20, b: 20, l: 20, r: 20 }, font: { size: 11, family: 'Source Sans 3', color: '#FAFAFA' }, plot_bgcolor: 'transparent', paper_bgcolor: 'transparent' }, { responsive: true, displayModeBar: false });
+        });
+    </script>
+</body>
+</html>
