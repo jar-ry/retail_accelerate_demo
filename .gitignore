@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 .env
 .env.local
+
+# Internal planning docs
+PLANNING.md
+ARCHITECTURE.md
