@@ -1,0 +1,96 @@
+name: supplier_performance
+tables:
+  - name: SELLTHROUGH
+    base_table:
+      schema: APP_CODE
+      table: SELLTHROUGH
+    dimensions:
+      - name: supplier_name
+        expr: SUPPLIER_NAME
+        description: Supplier company name
+      - name: brand_name
+        expr: BRAND_NAME
+        description: Product brand name
+      - name: category
+        expr: CATEGORY
+        description: Product category
+      - name: state
+        expr: STATE
+        description: Australian state
+      - name: region
+        expr: REGION
+        description: Region type (metro/regional)
+      - name: fiscal_week
+        expr: FISCAL_WEEK
+        description: Fiscal week number
+      - name: fiscal_year
+        expr: FISCAL_YEAR
+        description: Fiscal year
+    measures:
+      - name: units_sold
+        expr: UNITS_SOLD
+        description: Total units sold
+        default_aggregation: sum
+      - name: revenue
+        expr: REVENUE
+        description: Net revenue in AUD
+        default_aggregation: sum
+      - name: margin
+        expr: MARGIN
+        description: Gross margin in AUD
+        default_aggregation: sum
+      - name: rate_of_sale
+        expr: RATE_OF_SALE
+        description: Units per store per week
+        default_aggregation: avg
+
+  - name: SEGMENTS
+    base_table:
+      schema: APP_CODE
+      table: SEGMENTS
+    dimensions:
+      - name: supplier_name
+        expr: SUPPLIER_NAME
+        description: Supplier name
+      - name: brand_name
+        expr: BRAND_NAME
+        description: Brand name
+      - name: segment_name
+        expr: SEGMENT_NAME
+        description: Customer segment
+      - name: fiscal_year
+        expr: FISCAL_YEAR
+        description: Fiscal year
+    measures:
+      - name: customer_count
+        expr: CUSTOMER_COUNT
+        description: Number of customers in this segment
+        default_aggregation: sum
+      - name: segment_revenue
+        expr: REVENUE
+        description: Revenue from this segment
+        default_aggregation: sum
+
+  - name: SWITCHING
+    base_table:
+      schema: APP_CODE
+      table: SWITCHING
+    dimensions:
+      - name: category
+        expr: CATEGORY
+        description: Product category
+      - name: from_brand
+        expr: FROM_BRAND
+        description: Brand customers switched from
+      - name: to_brand
+        expr: TO_BRAND
+        description: Brand customers switched to
+    measures:
+      - name: switch_count
+        expr: SWITCH_COUNT
+        description: Number of brand switches
+        default_aggregation: sum
+      - name: switching_customers
+        expr: CUSTOMER_COUNT
+        description: Distinct customers who switched brands
+        default_aggregation: sum

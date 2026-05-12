@@ -1,0 +1,16 @@
+-- ============================================================
+-- Step 5: Register version, set release directive, set distribution
+-- ============================================================
+
+USE ROLE ACCOUNTADMIN;
+
+ALTER APPLICATION PACKAGE SUPPLIER_PORTAL_BUGABOO_PACKAGE
+  ADD VERSION v1
+  USING '@SUPPLIER_PORTAL_BUGABOO_PACKAGE.APP_ASSETS.APP_STAGE'
+  LABEL = 'Supplier Portal v1.0 - Bugaboo';
+
+ALTER APPLICATION PACKAGE SUPPLIER_PORTAL_BUGABOO_PACKAGE
+  SET DEFAULT RELEASE DIRECTIVE VERSION = v1 PATCH = 0;
+
+ALTER APPLICATION PACKAGE SUPPLIER_PORTAL_BUGABOO_PACKAGE
+  SET DISTRIBUTION = 'EXTERNAL';

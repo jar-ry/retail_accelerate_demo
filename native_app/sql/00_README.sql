@@ -1,0 +1,18 @@
+-- ============================================================
+-- Baby Mart Supplier Portal — Native App Deployment Guide
+-- Run these scripts IN ORDER on the RETAILER account
+-- 
+-- This creates ONE app package per supplier. Repeat steps 1-5
+-- for each supplier, changing the package name and WHERE filter.
+-- ============================================================
+--
+-- PREREQUISITES:
+--   - BABY_MART_DEMO database with ANALYTICS schema populated
+--   - Dynamic tables and secure views already created
+--     (see retailer/sql/00-03 scripts)
+--
+-- SUPPLIER ACCOUNT POST-INSTALL:
+--   After the supplier installs the app, they must run:
+--     GRANT DATABASE ROLE SNOWFLAKE.CORTEX_USER TO APPLICATION <app_name>;
+--   This enables the Cortex Agent AI chat feature.
+-- ============================================================

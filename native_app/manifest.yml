@@ -1,7 +1,7 @@
 manifest_version: 1
 version:
   name: v1
-  label: "Supplier Portal v1.0"
+  label: "Supplier Portal v1.8"
   comment: "Baby Mart Supplier Sellthrough Intelligence"
 
 artifacts:

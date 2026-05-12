@@ -7,11 +7,16 @@ st.title("👥 Customer Segments")
 
 session = get_active_session()
 
-df_segments = session.sql("""
+brands = session.sql("SELECT DISTINCT brand_name FROM APP_CODE.SEGMENTS ORDER BY brand_name").to_pandas()["BRAND_NAME"].tolist()
+
+brand = st.selectbox("Brand", ["All Brands"] + brands)
+brand_filter = f"AND brand_name = '{brand}'" if brand != "All Brands" else ""
+
+df_segments = session.sql(f"""
     SELECT segment_name, SUM(customer_count) as customers, SUM(revenue) as revenue,
            AVG(avg_items_per_txn) as avg_items
     FROM APP_CODE.SEGMENTS
-    WHERE fiscal_year = 2026
+    WHERE fiscal_year = 2026 {brand_filter}
     GROUP BY segment_name
     ORDER BY revenue DESC
 """).to_pandas()
@@ -33,3 +38,5 @@ if not df_segments.empty:
 
     st.subheader("Segment Performance Table")
     st.dataframe(df_segments, use_container_width=True, hide_index=True)
+else:
+    st.info("No segment data available for this selection.")
