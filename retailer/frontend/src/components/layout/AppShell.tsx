@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot } from "lucide-react";
 
 const categories = [
   { slug: "prams-strollers", label: "Prams & Strollers", icon: Baby },
@@ -7,6 +7,14 @@ const categories = [
   { slug: "nappies-wipes", label: "Nappies & Wipes", icon: ShoppingCart },
   { slug: "clothing", label: "Clothing", icon: Shirt },
   { slug: "feeding", label: "Feeding", icon: Utensils },
+];
+
+const topBrands = [
+  { name: "Huggies", slug: "Huggies" },
+  { name: "Bugaboo", slug: "Bugaboo" },
+  { name: "Uppababy", slug: "Uppababy" },
+  { name: "Rascal + Friends", slug: "Rascal + Friends" },
+  { name: "Maxi-Cosi", slug: "Maxi-Cosi" },
 ];
 
 export default function AppShell() {
@@ -64,6 +72,52 @@ export default function AppShell() {
               {cat.label}
             </NavLink>
           ))}
+
+          <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Brands
+          </div>
+          {topBrands.map((brand) => (
+            <NavLink
+              key={brand.slug}
+              to={`/brand/${encodeURIComponent(brand.slug)}`}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                  isActive
+                    ? "bg-blue-50 text-blue-800 border-blue-600 font-medium"
+                    : "text-slate-600 border-transparent hover:bg-slate-50"
+                }`
+              }
+            >
+              <Tag className="w-3.5 h-3.5" />
+              {brand.name}
+            </NavLink>
+          ))}
+
+          <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            AI Tools
+          </div>
+          <NavLink
+            to="/battlecards"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                isActive ? "bg-blue-50 text-blue-800 border-blue-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+              }`
+            }
+          >
+            <Swords className="w-4 h-4" />
+            Battlecards
+          </NavLink>
+          <NavLink
+            to="/agent"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                isActive ? "bg-blue-50 text-blue-800 border-blue-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+              }`
+            }
+          >
+            <Bot className="w-4 h-4" />
+            Category Agent
+          </NavLink>
         </nav>
         <div className="p-4 border-t border-slate-200">
           <div className="text-[10px] text-slate-500">Powered by Snowflake</div>

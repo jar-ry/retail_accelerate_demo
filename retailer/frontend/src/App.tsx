@@ -4,7 +4,8 @@ import AppShell from "./components/layout/AppShell";
 import DashboardPage from "./pages/DashboardPage";
 import CategoryPage from "./pages/CategoryPage";
 import BrandDetailPage from "./pages/BrandDetailPage";
-import BattlecardPage from "./pages/BattlecardPage";
+import BattlecardsPage from "./pages/BattlecardsPage";
+import AgentPage from "./pages/AgentPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000 } },
@@ -20,7 +21,8 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/category/:categorySlug" element={<CategoryPage />} />
             <Route path="/brand/:brandName" element={<BrandDetailPage />} />
-            <Route path="/brand/:brandName/battlecard" element={<BattlecardPage />} />
+            <Route path="/battlecards" element={<BattlecardsPage />} />
+            <Route path="/agent" element={<AgentPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
