@@ -36,6 +36,7 @@ def generate_battlecard(req: BattlecardRequest):
     context = (
         f"You are a retail data analyst at Baby Mart, Australia's largest baby retailer. "
         f"Generate insights about {req.brand} in {req.category}. "
+        f"Include supply chain reliability (DIFOT - Delivered In Full On Time) where relevant. "
         f"Respond with EXACTLY 3 concise bullet points (one sentence each). No headers, no numbering, just 3 lines starting with •"
     )
 

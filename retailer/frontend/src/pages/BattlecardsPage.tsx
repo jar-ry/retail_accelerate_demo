@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { Swords, X, Sparkles, Loader2 } from "lucide-react";
+import { brandData } from "../data/brandConfig";
 
-const brands = [
-  { name: "Huggies", category: "Nappies & Wipes", revenue: "$1.4M", share: "42%", growth: "+1.2%", ros: "18.2/wk", margin: "32%" },
-  { name: "Bugaboo", category: "Prams & Strollers", revenue: "$1.2M", share: "28%", growth: "-8.4%", ros: "3.2/wk", margin: "42%" },
-  { name: "Uppababy", category: "Prams & Strollers", revenue: "$892K", share: "21%", growth: "+24.3%", ros: "4.1/wk", margin: "44%" },
-  { name: "Rascal + Friends", category: "Nappies & Wipes", revenue: "$1.1M", share: "33%", growth: "+18.7%", ros: "14.8/wk", margin: "36%" },
-  { name: "Maxi-Cosi", category: "Car Seats", revenue: "$524K", share: "28%", growth: "+7.2%", ros: "5.8/wk", margin: "38%" },
-  { name: "Pampers", category: "Nappies & Wipes", revenue: "$680K", share: "20%", growth: "-6.2%", ros: "8.4/wk", margin: "30%" },
-  { name: "Cybex", category: "Car Seats", revenue: "$412K", share: "22%", growth: "+15.2%", ros: "3.4/wk", margin: "43%" },
-  { name: "Bonds Baby", category: "Clothing", revenue: "$342K", share: "32%", growth: "+4.2%", ros: "8.2/wk", margin: "45%" },
-  { name: "Dr Browns", category: "Feeding", revenue: "$198K", share: "18%", growth: "+11.8%", ros: "3.8/wk", margin: "42%" },
-  { name: "Infasecure", category: "Car Seats", revenue: "$142K", share: "8%", growth: "-12.8%", ros: "4.2/wk", margin: "28%" },
+const battlecardBrands = [
+  "Huggies", "Bugaboo", "Uppababy", "Rascal + Friends", "Maxi-Cosi",
+  "Pampers", "Cybex", "Bonds Baby", "Dr Browns", "Infasecure",
 ];
 
 interface BattlecardData {
@@ -21,29 +14,30 @@ interface BattlecardData {
 }
 
 export default function BattlecardsPage() {
-  const [selectedBrand, setSelectedBrand] = useState<typeof brands[0] | null>(null);
+  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
   const [battlecard, setBattlecard] = useState<BattlecardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [cache, setCache] = useState<Record<string, BattlecardData>>({});
 
-  const generateBattlecard = async (brand: typeof brands[0]) => {
-    setSelectedBrand(brand);
-    if (cache[brand.name]) {
-      setBattlecard(cache[brand.name]);
+  const generateBattlecard = async (name: string) => {
+    setSelectedBrand(name);
+    if (cache[name]) {
+      setBattlecard(cache[name]);
       return;
     }
     setBattlecard(null);
     setLoading(true);
     try {
+      const data = brandData[name];
       const res = await fetch("/api/battlecard/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brand: brand.name, category: brand.category }),
+        body: JSON.stringify({ brand: name, category: data?.category || "" }),
       });
-      const data = await res.json();
-      const card = { sellthrough: data.sellthrough, switching: data.switching, summary: data.summary };
+      const result = await res.json();
+      const card = { sellthrough: result.sellthrough, switching: result.switching, summary: result.summary };
       setBattlecard(card);
-      setCache((prev) => ({ ...prev, [brand.name]: card }));
+      setCache((prev) => ({ ...prev, [name]: card }));
     } catch {
       setBattlecard({ sellthrough: "Error loading.", switching: "Error loading.", summary: "Error loading." });
     } finally {
@@ -54,6 +48,8 @@ export default function BattlecardsPage() {
   const closeModal = () => {
     setSelectedBrand(null);
   };
+
+  const selected = selectedBrand ? brandData[selectedBrand] : null;
 
   return (
     <div className="p-6">
@@ -67,33 +63,37 @@ export default function BattlecardsPage() {
       </p>
 
       <div className="grid grid-cols-2 gap-3">
-        {brands.map((b) => (
-          <button
-            key={b.name}
-            onClick={() => generateBattlecard(b)}
-            className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left"
-          >
-            <div>
-              <div className="font-medium text-slate-900 text-sm">{b.name}</div>
-              <div className="text-xs text-slate-500">{b.category}</div>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-blue-600 font-medium">
-              <Sparkles className="w-3.5 h-3.5" />
-              Generate
-            </div>
-          </button>
-        ))}
+        {battlecardBrands.map((name) => {
+          const b = brandData[name];
+          if (!b) return null;
+          return (
+            <button
+              key={name}
+              onClick={() => generateBattlecard(name)}
+              className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all text-left"
+            >
+              <div>
+                <div className="font-medium text-slate-900 text-sm">{b.name}</div>
+                <div className="text-xs text-slate-500">{b.category}</div>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-blue-600 font-medium">
+                <Sparkles className="w-3.5 h-3.5" />
+                Generate
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {selectedBrand && (
+      {selectedBrand && selected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8" onClick={closeModal}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-blue-800 text-white p-6 rounded-t-2xl">
+            <div className="bg-blue-800 text-white p-6 rounded-t-2xl relative">
               <button onClick={closeModal} className="absolute top-4 right-4 text-blue-200 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
               <div className="text-xs font-medium text-blue-200 uppercase tracking-wider">AI-Generated Negotiation Battlecard</div>
-              <h2 className="mt-1 text-xl font-bold">{selectedBrand.name} — {selectedBrand.category}</h2>
+              <h2 className="mt-1 text-xl font-bold">{selected.name} — {selected.category}</h2>
               <p className="mt-1 text-sm text-blue-200">Generated by Cortex AI | May 2026 | Confidential</p>
             </div>
 
@@ -103,23 +103,23 @@ export default function BattlecardsPage() {
                 <div className="grid grid-cols-5 gap-3">
                   <div className="p-3 bg-slate-50 rounded-lg text-center">
                     <div className="text-[10px] text-slate-500 uppercase">Revenue</div>
-                    <div className="font-mono font-bold text-lg">{selectedBrand.revenue}</div>
+                    <div className="font-mono font-bold text-lg">{selected.revenue}</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg text-center">
                     <div className="text-[10px] text-slate-500 uppercase">Share</div>
-                    <div className="font-mono font-bold text-lg">{selectedBrand.share}</div>
+                    <div className="font-mono font-bold text-lg">{selected.share}</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg text-center">
                     <div className="text-[10px] text-slate-500 uppercase">Growth</div>
-                    <div className={`font-mono font-bold text-lg ${selectedBrand.growth.startsWith("-") ? "text-red-600" : "text-emerald-600"}`}>{selectedBrand.growth}</div>
+                    <div className={`font-mono font-bold text-lg ${selected.growth.startsWith("-") ? "text-red-600" : "text-emerald-600"}`}>{selected.growth}</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg text-center">
                     <div className="text-[10px] text-slate-500 uppercase">RoS</div>
-                    <div className="font-mono font-bold text-lg">{selectedBrand.ros}</div>
+                    <div className="font-mono font-bold text-lg">{selected.ros}</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg text-center">
                     <div className="text-[10px] text-slate-500 uppercase">Margin</div>
-                    <div className="font-mono font-bold text-lg">{selectedBrand.margin}</div>
+                    <div className="font-mono font-bold text-lg">{selected.margin}</div>
                   </div>
                 </div>
               </div>

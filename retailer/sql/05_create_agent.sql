@@ -6,11 +6,58 @@
 -- ============================================================
 
 USE DATABASE BABY_MART_DEMO;
-USE SCHEMA AI;
+USE SCHEMA ANALYTICS;
 USE WAREHOUSE DEMO_AI_WH;
 
--- First create the semantic view (if not already created)
--- This is the RETAILER's internal semantic view covering ALL suppliers
+-- Create DIFOT (Delivered In Full On Time) table
+CREATE TABLE IF NOT EXISTS BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT (
+  BRAND_NAME VARCHAR(100),
+  CATEGORY VARCHAR(50),
+  FISCAL_YEAR NUMBER,
+  FISCAL_WEEK NUMBER,
+  DIFOT_PCT FLOAT COMMENT 'Delivered In Full On Time percentage',
+  ORDERS_TOTAL NUMBER COMMENT 'Total orders placed',
+  ORDERS_ON_TIME NUMBER COMMENT 'Orders delivered in full on time'
+);
+
+-- Populate DIFOT if empty
+INSERT INTO BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT
+SELECT * FROM (
+  WITH brands AS (
+    SELECT DISTINCT BRAND_NAME, CATEGORY FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+  ),
+  weeks AS (
+    SELECT DISTINCT FISCAL_YEAR, FISCAL_WEEK FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+  ),
+  base_rates AS (
+    SELECT BRAND_NAME,
+      CASE BRAND_NAME
+        WHEN 'Huggies' THEN 94.2 WHEN 'Bugaboo' THEN 87.1 WHEN 'Uppababy' THEN 91.8
+        WHEN 'Rascal + Friends' THEN 96.4 WHEN 'Maxi-Cosi' THEN 92.6 WHEN 'Pampers' THEN 93.8
+        WHEN 'Cybex' THEN 90.4 WHEN 'Bonds Baby' THEN 97.1 WHEN 'Dr Browns' THEN 95.2
+        WHEN 'Infasecure' THEN 82.3 WHEN 'Silver Cross' THEN 88.6 WHEN 'Babyzen' THEN 89.2
+        WHEN 'Mountain Buggy' THEN 86.4 WHEN 'Purebaby' THEN 94.8 WHEN 'Tooshies' THEN 95.6
+        WHEN 'ECO by Naty' THEN 91.2 WHEN 'Cotton On Baby' THEN 96.8 WHEN 'Marquise' THEN 93.4
+        WHEN 'Bebe' THEN 84.2 WHEN 'Britax' THEN 93.1 WHEN 'Nuna' THEN 90.8
+        WHEN 'Avent' THEN 95.4 WHEN 'Tommee Tippee' THEN 94.6 WHEN 'Pigeon' THEN 92.8
+        WHEN 'NUK' THEN 88.4 ELSE 90.0
+      END AS base_difot
+    FROM brands
+  )
+  SELECT
+    b.BRAND_NAME, b.CATEGORY, w.FISCAL_YEAR, w.FISCAL_WEEK,
+    ROUND(br.base_difot + (UNIFORM(-3.0, 3.0, RANDOM())), 1) AS DIFOT_PCT,
+    ROUND(UNIFORM(20, 200, RANDOM())) AS ORDERS_TOTAL,
+    NULL AS ORDERS_ON_TIME
+  FROM brands b CROSS JOIN weeks w JOIN base_rates br ON br.BRAND_NAME = b.BRAND_NAME
+) WHERE NOT EXISTS (SELECT 1 FROM BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT LIMIT 1);
+
+UPDATE BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT
+SET ORDERS_ON_TIME = ROUND(ORDERS_TOTAL * DIFOT_PCT / 100)
+WHERE ORDERS_ON_TIME IS NULL;
+
+-- Create the semantic view
+USE SCHEMA AI;
 CALL SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
   'BABY_MART_DEMO.ANALYTICS',
   $$
@@ -161,6 +208,37 @@ tables:
       - name: segment_revenue
         expr: REVENUE
         default_aggregation: sum
+  - name: DIFOT
+    base_table:
+      database: BABY_MART_DEMO
+      schema: ANALYTICS
+      table: DT_SUPPLIER_DIFOT
+    dimensions:
+      - name: brand_name
+        expr: BRAND_NAME
+        description: Brand name
+      - name: category
+        expr: CATEGORY
+        description: Product category
+      - name: fiscal_year
+        expr: FISCAL_YEAR
+        description: Fiscal year
+      - name: fiscal_week
+        expr: FISCAL_WEEK
+        description: Fiscal week
+    measures:
+      - name: difot_pct
+        expr: DIFOT_PCT
+        description: Delivered In Full On Time percentage
+        default_aggregation: avg
+      - name: orders_total
+        expr: ORDERS_TOTAL
+        description: Total orders placed
+        default_aggregation: sum
+      - name: orders_on_time
+        expr: ORDERS_ON_TIME
+        description: Orders delivered in full on time
+        default_aggregation: sum
 verified_queries:
   - question: "What is the CLV for Huggies customers vs category average?"
     sql: |
@@ -180,6 +258,12 @@ verified_queries:
       FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
       WHERE fiscal_year = 2026
       GROUP BY brand_name, category ORDER BY total_revenue DESC LIMIT 10
+  - question: "Which brands have the worst DIFOT?"
+    sql: |
+      SELECT brand_name, category, AVG(difot_pct) as avg_difot, SUM(orders_total) as total_orders
+      FROM BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT
+      WHERE fiscal_year = 2026
+      GROUP BY brand_name, category ORDER BY avg_difot ASC LIMIT 10
 $$,
   FALSE
 );
@@ -200,7 +284,7 @@ FROM SPECIFICATION $$
       "tool_spec": {
         "type": "cortex_analyst_text_to_sql",
         "name": "query_category_data",
-        "description": "Query category performance data including sell-through, CLV, brand switching, promotions, competitive pricing, and customer segments."
+        "description": "Query category performance data including sell-through, CLV, brand switching, promotions, competitive pricing, customer segments, and DIFOT (Delivered In Full On Time) supply chain metrics."
       }
     }
   ],

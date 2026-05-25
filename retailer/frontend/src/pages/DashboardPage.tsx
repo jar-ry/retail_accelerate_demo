@@ -1,38 +1,18 @@
 import { Link } from "react-router-dom";
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { brandData, categories, topPerformers, bottomPerformers } from "../data/brandConfig";
 
 const kpis = [
-  { label: "Total Revenue (L4W)", value: "$8.42M", delta: "+6.2%", positive: true },
-  { label: "Units Sold (L4W)", value: "142,831", delta: "+4.8%", positive: true },
+  { label: "Total Revenue (L7D)", value: "$2.14M", delta: "+6.2%", positive: true },
+  { label: "Units Sold (L7D)", value: "36,208", delta: "+4.8%", positive: true },
   { label: "Avg Margin", value: "38.4%", delta: "-0.3pp", positive: false },
   { label: "Active Brands", value: "25", delta: "", positive: true },
 ];
 
-const topPerformers = [
-  { brand: "Uppababy", category: "Prams & Strollers", revenue: "$892K", growth: "+24.3%", status: "hot" },
-  { brand: "Rascal + Friends", category: "Nappies & Wipes", revenue: "$1.1M", growth: "+18.7%", status: "hot" },
-  { brand: "Cybex", category: "Car Seats", revenue: "$412K", growth: "+15.2%", status: "hot" },
-  { brand: "Purebaby", category: "Clothing", revenue: "$287K", growth: "+12.1%", status: "warm" },
-  { brand: "Dr Browns", category: "Feeding", revenue: "$198K", growth: "+11.8%", status: "warm" },
-];
-
-const bottomPerformers = [
-  { brand: "Bugaboo", category: "Prams & Strollers", revenue: "$1.2M", growth: "-8.4%", status: "concern" },
-  { brand: "Pampers", category: "Nappies & Wipes", revenue: "$680K", growth: "-6.2%", status: "concern" },
-  { brand: "Infasecure", category: "Car Seats", revenue: "$142K", growth: "-12.8%", status: "critical" },
-  { brand: "Bebe", category: "Clothing", revenue: "$89K", growth: "-9.1%", status: "concern" },
-  { brand: "NUK", category: "Feeding", revenue: "$76K", growth: "-7.4%", status: "concern" },
-];
-
-const categoryBreakdown = [
-  { name: "Nappies & Wipes", revenue: "$3.2M", pct: 38, growth: "+5.1%", brands: 5 },
-  { name: "Prams & Strollers", revenue: "$2.1M", pct: 25, growth: "+2.3%", brands: 5 },
-  { name: "Car Seats", revenue: "$1.4M", pct: 17, growth: "+3.8%", brands: 5 },
-  { name: "Clothing", revenue: "$0.9M", pct: 11, growth: "+7.2%", brands: 5 },
-  { name: "Feeding", revenue: "$0.8M", pct: 9, growth: "+4.5%", brands: 5 },
-];
-
 export default function DashboardPage() {
+  const top = topPerformers.map((name) => brandData[name]);
+  const bottom = bottomPerformers.map((name) => brandData[name]);
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -77,10 +57,10 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {topPerformers.map((p) => (
-                <tr key={p.brand} className="border-b border-slate-50 hover:bg-slate-50">
+              {top.map((p) => (
+                <tr key={p.name} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="py-2">
-                    <Link to={`/brand/${encodeURIComponent(p.brand)}`} className="font-medium text-blue-700 hover:underline">{p.brand}</Link>
+                    <Link to={`/brand/${encodeURIComponent(p.name)}`} className="font-medium text-blue-700 hover:underline">{p.name}</Link>
                   </td>
                   <td className="py-2 text-slate-600">{p.category}</td>
                   <td className="py-2 text-right font-mono">{p.revenue}</td>
@@ -106,10 +86,10 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {bottomPerformers.map((p) => (
-                <tr key={p.brand} className="border-b border-slate-50 hover:bg-slate-50">
+              {bottom.map((p) => (
+                <tr key={p.name} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="py-2">
-                    <Link to={`/brand/${encodeURIComponent(p.brand)}`} className="font-medium text-blue-700 hover:underline">{p.brand}</Link>
+                    <Link to={`/brand/${encodeURIComponent(p.name)}`} className="font-medium text-blue-700 hover:underline">{p.name}</Link>
                   </td>
                   <td className="py-2 text-slate-600">{p.category}</td>
                   <td className="py-2 text-right font-mono">{p.revenue}</td>
@@ -127,17 +107,17 @@ export default function DashboardPage() {
           <thead>
             <tr className="border-b border-slate-100">
               <th className="text-left py-2 text-xs font-semibold text-slate-500">Category</th>
-              <th className="text-right py-2 text-xs font-semibold text-slate-500">Revenue (L4W)</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">Revenue (L7D)</th>
               <th className="text-left py-2 text-xs font-semibold text-slate-500 pl-4">Share</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Growth vs LY</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Brands</th>
             </tr>
           </thead>
           <tbody>
-            {categoryBreakdown.map((c) => (
+            {categories.map((c) => (
               <tr key={c.name} className="border-b border-slate-50 hover:bg-slate-50">
                 <td className="py-2.5">
-                  <Link to={`/category/${c.name.toLowerCase().replace(/ & /g, "-").replace(/ /g, "-")}`} className="font-medium text-blue-700 hover:underline">
+                  <Link to={`/category/${c.slug}`} className="font-medium text-blue-700 hover:underline">
                     {c.name}
                   </Link>
                 </td>
@@ -151,7 +131,7 @@ export default function DashboardPage() {
                   </div>
                 </td>
                 <td className="py-2.5 text-right font-mono text-emerald-600">{c.growth}</td>
-                <td className="py-2.5 text-right font-mono text-slate-600">{c.brands}</td>
+                <td className="py-2.5 text-right font-mono text-slate-600">{c.brands.length}</td>
               </tr>
             ))}
           </tbody>

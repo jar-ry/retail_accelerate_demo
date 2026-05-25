@@ -120,7 +120,7 @@ export default function AgentPage() {
           </button>
         </div>
         <div className="flex gap-2 mt-2">
-          {["Top 5 brands by revenue growth this year", "Which brands are losing the most customers in Prams & Strollers?", "Compare Huggies promotion effectiveness by mechanic"].map((q) => (
+          {["Top 5 brands by revenue growth this year", "Which brands are losing the most customers in Nappies & Wipes?", "Compare Huggies promotion effectiveness by mechanic"].map((q) => (
             <button
               key={q}
               onClick={() => { setInput(q); }}
