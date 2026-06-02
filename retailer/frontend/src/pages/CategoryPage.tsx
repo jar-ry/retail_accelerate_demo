@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { brandData, categories } from "../data/brandConfig";
+import BrandBubbleChart from "../components/charts/BrandBubbleChart";
 
 export default function CategoryPage() {
   const { categorySlug } = useParams();
@@ -15,6 +16,14 @@ export default function CategoryPage() {
       <div className="flex items-center gap-3 mb-6">
         <Link to="/dashboard" className="text-slate-400 hover:text-slate-600"><ArrowLeft className="w-5 h-5" /></Link>
         <h1 className="text-xl font-bold text-slate-900">{category.name}</h1>
+      </div>
+
+      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-800">Brand Performance Matrix</h3>
+          <span className="text-xs text-slate-400">Click a bubble to explore brand</span>
+        </div>
+        <BrandBubbleChart brands={brands} />
       </div>
 
       <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">

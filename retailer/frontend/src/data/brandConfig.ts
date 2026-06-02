@@ -13,6 +13,7 @@ export interface BrandData {
   customerCount: string;
   l1dGrowth: string;
   difot: string;
+  marginGrowth?: string;
   statePerformance: { state: string; revenue: string; growth: string; woc: string }[];
   segments: { name: string; penetration: string; vsCategory: string }[];
   switchingIn: { from: string; pct: string }[];
@@ -948,11 +949,11 @@ export const brandData: Record<string, BrandData> = {
 };
 
 export const categories = [
-  { slug: "nappies-wipes", name: "Nappies & Wipes", revenue: "$3.2M", pct: 38, growth: "+5.1%", brands: ["Huggies", "Rascal + Friends", "Pampers", "Tooshies", "ECO by Naty"] },
-  { slug: "prams-strollers", name: "Prams & Strollers", revenue: "$2.1M", pct: 25, growth: "+2.3%", brands: ["Bugaboo", "Uppababy", "Silver Cross", "Babyzen", "Mountain Buggy"] },
-  { slug: "car-seats", name: "Car Seats", revenue: "$1.4M", pct: 17, growth: "+3.8%", brands: ["Maxi-Cosi", "Britax", "Cybex", "Nuna", "Infasecure"] },
-  { slug: "clothing", name: "Clothing", revenue: "$0.9M", pct: 11, growth: "+7.2%", brands: ["Bonds Baby", "Purebaby", "Cotton On Baby", "Marquise", "Bebe"] },
-  { slug: "feeding", name: "Feeding", revenue: "$0.8M", pct: 9, growth: "+4.5%", brands: ["Avent", "Tommee Tippee", "Dr Browns", "Pigeon", "NUK"] },
+  { slug: "nappies-wipes", name: "Nappies & Wipes", revenue: "$3.2M", pct: 38, growth: "+5.1%", marginGrowth: "-0.4", brands: ["Huggies", "Rascal + Friends", "Pampers", "Tooshies", "ECO by Naty"] },
+  { slug: "prams-strollers", name: "Prams & Strollers", revenue: "$2.1M", pct: 25, growth: "+2.3%", marginGrowth: "+1.2", brands: ["Bugaboo", "Uppababy", "Silver Cross", "Babyzen", "Mountain Buggy"] },
+  { slug: "car-seats", name: "Car Seats", revenue: "$1.4M", pct: 17, growth: "+3.8%", marginGrowth: "+0.8", brands: ["Maxi-Cosi", "Britax", "Cybex", "Nuna", "Infasecure"] },
+  { slug: "clothing", name: "Clothing", revenue: "$0.9M", pct: 11, growth: "+7.2%", marginGrowth: "+2.1", brands: ["Bonds Baby", "Purebaby", "Cotton On Baby", "Marquise", "Bebe"] },
+  { slug: "feeding", name: "Feeding", revenue: "$0.8M", pct: 9, growth: "+4.5%", marginGrowth: "-0.2", brands: ["Avent", "Tommee Tippee", "Dr Browns", "Pigeon", "NUK"] },
 ];
 
 export const topPerformers = ["Uppababy", "Rascal + Friends", "Cybex", "Purebaby", "Dr Browns"];

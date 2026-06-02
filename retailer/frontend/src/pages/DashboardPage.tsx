@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { brandData, categories, topPerformers, bottomPerformers } from "../data/brandConfig";
+import CategoryBubbleChart from "../components/charts/CategoryBubbleChart";
 
 const kpis = [
   { label: "Total Revenue (L7D)", value: "$2.14M", delta: "+6.2%", positive: true },
@@ -17,13 +18,7 @@ export default function DashboardPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-slate-900">Category Performance Dashboard</h1>
-        <select className="text-xs border border-slate-200 rounded-md px-3 py-1.5">
-          <option>Last 4 Weeks</option>
-          <option>Last 8 Weeks</option>
-          <option>MTD</option>
-          <option>QTD</option>
-          <option>YTD</option>
-        </select>
+        <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md font-medium">Last 4 Weeks</div>
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -39,6 +34,14 @@ export default function DashboardPage() {
             )}
           </div>
         ))}
+      </div>
+
+      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-slate-800">Category Performance Matrix</h3>
+          <span className="text-xs text-slate-400">Click a bubble to explore the category</span>
+        </div>
+        <CategoryBubbleChart categories={categories} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">

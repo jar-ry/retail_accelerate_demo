@@ -10,3 +10,4 @@ __pycache__/
 PLANNING.md
 ARCHITECTURE.md
 DEMO_SCRIPT.md
+.snowflake/cortex/plans/*
