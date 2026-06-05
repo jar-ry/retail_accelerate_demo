@@ -18,6 +18,13 @@ import ReorderQueuePage from "./pages/ReorderQueuePage";
 import ReplenishmentBrandPage from "./pages/ReplenishmentBrandPage";
 import SkuDetailPage from "./pages/SkuDetailPage";
 import StoreDemandProfilePage from "./pages/StoreDemandProfilePage";
+import AudienceBuilderPage from "./pages/AudienceBuilderPage";
+import CampaignListPage from "./pages/CampaignListPage";
+import CampaignOffersPage from "./pages/CampaignOffersPage";
+import { AudienceProvider } from "./context/AudienceContext";
+import VendorProfitabilityPage from "./pages/VendorProfitabilityPage";
+import CategoryBenchmarkingPage from "./pages/CategoryBenchmarkingPage";
+import VendorScorecardPage from "./pages/VendorScorecardPage";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 5 * 60 * 1000 } },
@@ -26,6 +33,7 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AudienceProvider>
       <BrowserRouter>
         <Routes>
           <Route element={<AppShell />}>
@@ -47,9 +55,17 @@ export default function App() {
             <Route path="/replenishment/reorder" element={<ReorderQueuePage />} />
             <Route path="/replenishment/brand/:brandName" element={<ReplenishmentBrandPage />} />
             <Route path="/replenishment/brand/:brandName/sku/:skuClass" element={<SkuDetailPage />} />
+            <Route path="/campaigns" element={<CampaignListPage />} />
+            <Route path="/campaigns/audience" element={<AudienceBuilderPage />} />
+            <Route path="/campaigns/offers" element={<CampaignOffersPage />} />
+            <Route path="/vendor/profitability" element={<VendorProfitabilityPage />} />
+            <Route path="/vendor/benchmarking" element={<CategoryBenchmarkingPage />} />
+            <Route path="/vendor/scorecard" element={<VendorScorecardPage />} />
+            <Route path="/vendor/scorecard/:supplier" element={<VendorScorecardPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
+      </AudienceProvider>
     </QueryClientProvider>
   );
 }

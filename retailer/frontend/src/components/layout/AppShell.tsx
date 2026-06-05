@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck, AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck, AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift, DollarSign, BarChart3, FileText } from "lucide-react";
 import { usePrefetchSupplyData } from "../../hooks/useSupplyData";
 
 const categories = [
@@ -19,13 +19,15 @@ const topBrands = [
   { name: "Maxi-Cosi", slug: "Maxi-Cosi" },
 ];
 
-type Persona = "category" | "supply";
+type Persona = "category" | "supply" | "campaign";
 
 export default function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [persona, setPersona] = useState<Persona>(() => {
-    return location.pathname.startsWith("/replenishment") ? "supply" : "category";
+    if (location.pathname.startsWith("/replenishment")) return "supply";
+    if (location.pathname.startsWith("/campaigns")) return "campaign";
+    return "category";
   });
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const prefetchSupply = usePrefetchSupplyData();
@@ -38,7 +40,8 @@ export default function AppShell() {
     setPersona(p);
     setShowPersonaMenu(false);
     if (p === "category") navigate("/dashboard");
-    else navigate("/replenishment");
+    else if (p === "supply") navigate("/replenishment");
+    else navigate("/campaigns");
   };
 
   return (
@@ -52,7 +55,7 @@ export default function AppShell() {
             <div>
               <div className="font-bold text-slate-900 text-sm">Baby Mart</div>
               <div className="text-[10px] text-slate-500 font-medium">
-                {persona === "category" ? "Category Intelligence" : "Supply Chain"}
+                {persona === "category" ? "Category Intelligence" : persona === "supply" ? "Supply Chain" : "Campaign & CRM"}
               </div>
             </div>
           </div>
@@ -63,18 +66,26 @@ export default function AppShell() {
             className={`w-full px-3 py-2 rounded-md border flex items-center justify-between cursor-pointer transition-all ${
               persona === "category"
                 ? "bg-blue-50 border-blue-200"
-                : "bg-emerald-50 border-emerald-200"
+                : persona === "supply"
+                ? "bg-emerald-50 border-emerald-200"
+                : "bg-amber-50 border-amber-200"
             }`}
           >
             <div>
-              <div className={`text-[10px] font-bold uppercase tracking-wide ${persona === "category" ? "text-blue-700" : "text-emerald-700"}`}>
-                {persona === "category" ? "Category Manager" : "Supply Chain Planner"}
+              <div className={`text-[10px] font-bold uppercase tracking-wide ${
+                persona === "category" ? "text-blue-700" : persona === "supply" ? "text-emerald-700" : "text-amber-700"
+              }`}>
+                {persona === "category" ? "Category Manager" : persona === "supply" ? "Supply Chain Planner" : "Campaign Manager"}
               </div>
-              <div className={`text-[9px] mt-0.5 ${persona === "category" ? "text-blue-500" : "text-emerald-500"}`}>
-                {persona === "category" ? "Commercial & negotiation" : "Inventory & replenishment"}
+              <div className={`text-[9px] mt-0.5 ${
+                persona === "category" ? "text-blue-500" : persona === "supply" ? "text-emerald-500" : "text-amber-500"
+              }`}>
+                {persona === "category" ? "Commercial & negotiation" : persona === "supply" ? "Inventory & replenishment" : "Audience & campaigns"}
               </div>
             </div>
-            <ChevronDown className={`w-3.5 h-3.5 ${persona === "category" ? "text-blue-400" : "text-emerald-400"}`} />
+            <ChevronDown className={`w-3.5 h-3.5 ${
+              persona === "category" ? "text-blue-400" : persona === "supply" ? "text-emerald-400" : "text-amber-400"
+            }`} />
           </button>
           {showPersonaMenu && (
             <div className="absolute top-full left-3 right-3 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden">
@@ -91,6 +102,13 @@ export default function AppShell() {
               >
                 <div className="text-[10px] font-bold text-emerald-700 uppercase">Supply Chain Planner</div>
                 <div className="text-[9px] text-slate-500">Inventory & replenishment</div>
+              </button>
+              <button
+                onClick={() => switchPersona("campaign")}
+                className={`w-full px-3 py-2.5 text-left hover:bg-slate-50 border-t border-slate-100 ${persona === "campaign" ? "bg-amber-50" : ""}`}
+              >
+                <div className="text-[10px] font-bold text-amber-700 uppercase">Campaign Manager</div>
+                <div className="text-[9px] text-slate-500">Audience & campaigns</div>
               </button>
             </div>
           )}
@@ -175,8 +193,45 @@ export default function AppShell() {
                 <Bot className="w-4 h-4" />
                 Category Agent
               </NavLink>
+
+              <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                Vendor Economics
+              </div>
+              <NavLink
+                to="/vendor/profitability"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                    isActive ? "bg-blue-50 text-blue-800 border-blue-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <DollarSign className="w-4 h-4" />
+                Vendor Profitability
+              </NavLink>
+              <NavLink
+                to="/vendor/benchmarking"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                    isActive ? "bg-blue-50 text-blue-800 border-blue-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <BarChart3 className="w-4 h-4" />
+                Vendor Matrix
+              </NavLink>
+              <NavLink
+                to="/vendor/scorecard"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                    isActive ? "bg-blue-50 text-blue-800 border-blue-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <FileText className="w-4 h-4" />
+                Vendor Scorecard
+              </NavLink>
             </>
-          ) : (
+          ) : persona === "supply" ? (
             <>
               <NavLink
                 to="/replenishment"
@@ -266,6 +321,50 @@ export default function AppShell() {
               >
                 <Bot className="w-4 h-4" />
                 Supply Agent
+              </NavLink>
+            </>
+          ) : (
+            <>
+              <NavLink
+                to="/campaigns"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer border-r-2 ${
+                    isActive && location.pathname === "/campaigns" ? "bg-amber-50 text-amber-800 border-amber-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <Megaphone className="w-4 h-4" />
+                Campaigns
+              </NavLink>
+
+              <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                Audience
+              </div>
+              <NavLink
+                to="/campaigns/audience"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                    isActive ? "bg-amber-50 text-amber-800 border-amber-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <Users className="w-4 h-4" />
+                Audience Builder
+              </NavLink>
+
+              <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                Activation
+              </div>
+              <NavLink
+                to="/campaigns/offers"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 text-sm cursor-pointer border-r-2 ${
+                    isActive ? "bg-amber-50 text-amber-800 border-amber-600 font-medium" : "text-slate-600 border-transparent hover:bg-slate-50"
+                  }`
+                }
+              >
+                <Gift className="w-4 h-4" />
+                Offers & Budget
               </NavLink>
             </>
           )}

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from backend.routes import battlecard, clv, elasticity, competitive, agent, supply
+from backend.routes import battlecard, clv, elasticity, competitive, agent, supply, campaign, vendor
 
 app = FastAPI(title="Baby Mart Category Manager API", version="1.0.0")
 
@@ -22,6 +22,8 @@ app.include_router(competitive.router, prefix="/api/competitive", tags=["Competi
 app.include_router(battlecard.router, prefix="/api/battlecard", tags=["Battlecard"])
 app.include_router(agent.router, prefix="/api/agent", tags=["Agent"])
 app.include_router(supply.router, prefix="/api/supply", tags=["Supply"])
+app.include_router(campaign.router, prefix="/api/campaign", tags=["Campaign"])
+app.include_router(vendor.router, prefix="/api/vendor", tags=["Vendor"])
 
 
 @app.get("/health")
