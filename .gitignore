@@ -5,9 +5,20 @@ __pycache__/
 *.pyc
 .env
 .env.local
+.env.production
+
+# Next.js
+baby-mart-app/.next/
+baby-mart-app/node_modules/
+
+# Old retailer build artifacts
+retailer/frontend/node_modules/
 
 # Internal planning docs
 PLANNING.md
 ARCHITECTURE.md
 DEMO_SCRIPT.md
 .snowflake/cortex/plans/*
+
+# Snowflake logs
+snowflake.log

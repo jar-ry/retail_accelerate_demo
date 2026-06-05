@@ -1,0 +1,27 @@
+definition_version: "2"
+
+entities:
+  BABY_MART_APP:
+    type: snowflake-app
+    identifier:
+      name: BABY_MART_APP
+      database: USER$JARCHEN
+      schema: PUBLIC
+    artifacts:
+      - src: ./*
+        dest: ./
+        ignore:
+          - node_modules
+          - .env*
+          - __pycache__
+          - "*.pyc"
+          - .next
+          - .git
+          - snowflake.log
+
+    query_warehouse: DEMO_ANALYTICS_WH
+    build_compute_pool:
+      name: SYSTEM_COMPUTE_POOL_CPU
+    service_compute_pool:
+      name: SYSTEM_COMPUTE_POOL_CPU
+    code_stage: BABY_MART_DEMO.APP.BABY_MART_APP_STAGE
