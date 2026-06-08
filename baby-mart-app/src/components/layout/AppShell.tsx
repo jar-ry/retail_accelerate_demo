@@ -64,7 +64,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setShowPersonaMenu(false);
     if (p === "category") router.push("/dashboard");
     else if (p === "supply") router.push("/replenishment");
-    else router.push("/campaigns");
+    else router.push("/campaigns/audience");
   };
 
   return (
@@ -162,11 +162,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 <>
-                  <NavItem href="/campaigns" icon={Megaphone} label="Campaigns" color="amber" />
-                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Audience</div>
                   <NavItem href="/campaigns/audience" icon={Users} label="Audience Builder" color="amber" />
                   <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Activation</div>
                   <NavItem href="/campaigns/offers" icon={Gift} label="Offers & Budget" color="amber" />
+                  <NavItem href="/campaigns" icon={Megaphone} label="Campaigns" color="amber" />
                 </>
               )}
             </nav>
