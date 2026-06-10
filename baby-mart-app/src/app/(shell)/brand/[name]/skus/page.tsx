@@ -108,7 +108,7 @@ export default function SkuPerformancePage() {
                 </th>
                 <th className="text-right px-2 py-2.5">Avg Price</th>
                 <th className="text-right px-2 py-2.5 cursor-pointer hover:text-slate-800" onClick={() => toggleSort("actualMarginPct")}>
-                  Margin % {sortKey === "actualMarginPct" ? (sortDir === "desc" ? "↓" : "↑") : ""}
+                  Gross Margin % {sortKey === "actualMarginPct" ? (sortDir === "desc" ? "↓" : "↑") : ""}
                 </th>
                 <th className="text-right px-3 py-2.5 cursor-pointer hover:text-slate-800" onClick={() => toggleSort("growth")}>
                   Growth {sortKey === "growth" ? (sortDir === "desc" ? "↓" : "↑") : ""}

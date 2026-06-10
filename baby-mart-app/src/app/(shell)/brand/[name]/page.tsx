@@ -61,7 +61,7 @@ export default function BrandDetailPage() {
           <div className="mt-1 font-mono text-xl font-bold text-slate-900">{data.units}</div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
-          <div className="text-[10px] font-medium text-slate-500 uppercase">Margin</div>
+          <div className="text-[10px] font-medium text-slate-500 uppercase">Gross Margin</div>
           <div className="mt-1 font-mono text-xl font-bold text-slate-900">{data.margin}</div>
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">

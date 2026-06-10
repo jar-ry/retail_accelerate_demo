@@ -41,7 +41,7 @@ export default function CategoryPage() {
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Units</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Growth vs LY</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">L1D</th>
-              <th className="text-right py-2 text-xs font-semibold text-slate-500">Margin</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">Gross Margin</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Rate of Sale</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">WOC</th>
             </tr>

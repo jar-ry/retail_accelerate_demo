@@ -47,7 +47,7 @@ export default function DashboardPage() {
     { label: "Revenue (L28D)", value: fmt(data.totalRevenue), delta: `${data.revenueGrowth > 0 ? "+" : ""}${data.revenueGrowth}%`, positive: data.revenueGrowth >= 0 },
     { label: "Transactions (L28D)", value: `${(data.totalTransactions / 1e3).toFixed(1)}K`, delta: `${data.transactionGrowth > 0 ? "+" : ""}${data.transactionGrowth}%`, positive: data.transactionGrowth >= 0 },
     { label: "Avg Basket", value: `$${data.avgBasket?.toFixed(2)}`, delta: "", positive: true },
-    { label: "Avg Margin", value: `${data.avgMargin?.toFixed(1)}%`, delta: "", positive: true },
+    { label: "Gross Margin", value: `${data.avgMargin?.toFixed(1)}%`, delta: "", positive: true },
   ];
 
   // Bubble chart data
@@ -68,7 +68,7 @@ export default function DashboardPage() {
       line: { width: 2, color: "white" },
     },
     hovertemplate: data.categories.map((c: any) =>
-      `<b>${c.category}</b><br>Growth: ${c.growth}%<br>Margin: ${c.margin}%<br>Revenue: ${fmt(c.revenue)}<extra></extra>`
+      `<b>${c.category}</b><br>Growth: ${c.growth}%<br>Gross Margin: ${c.margin}%<br>Revenue: ${fmt(c.revenue)}<extra></extra>`
     ),
   };
 
@@ -110,7 +110,7 @@ export default function DashboardPage() {
             height: 340,
             margin: { t: 20, r: 30, b: 50, l: 60 },
             xaxis: { title: { text: "YoY Growth (%)", font: { size: 11 } }, zeroline: false, gridcolor: "#f1f5f9" },
-            yaxis: { title: { text: "Margin (%)", font: { size: 11 } }, zeroline: false, gridcolor: "#f1f5f9" },
+            yaxis: { title: { text: "Gross Margin (%)", font: { size: 11 } }, zeroline: false, gridcolor: "#f1f5f9" },
             showlegend: false,
             plot_bgcolor: "#f8fafc",
             paper_bgcolor: "white",
@@ -192,7 +192,7 @@ export default function DashboardPage() {
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Revenue</th>
               <th className="text-left py-2 text-xs font-semibold text-slate-500 pl-4">Share</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Growth vs PY</th>
-              <th className="text-right py-2 text-xs font-semibold text-slate-500">Margin</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">Gross Margin</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Brands</th>
             </tr>
           </thead>
