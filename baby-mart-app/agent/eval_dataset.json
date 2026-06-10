@@ -1,0 +1,77 @@
+[
+  {
+    "input_query": "What are the top selling brands?",
+    "ground_truth_output": "The agent should ask a clarifying question because the query is ambiguous - it does not specify category, time period, or metric (units vs revenue). Per its instructions, it should ask ONE clarifying question before querying. The response should NOT return data without first asking for specifics.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "What is the total revenue for the Prams & Strollers category in fiscal year 2025?",
+    "ground_truth_output": "The agent should query revenue data filtered to Prams & Strollers category and fiscal year 2025. Response should lead with the total revenue figure in AUD, bold the key metric, and suggest next steps.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "Show me the year-over-year growth for Nappies & Wipes by brand.",
+    "ground_truth_output": "The agent should query sellthrough or revenue data for the Nappies & Wipes category by brand across fiscal years, calculate YoY growth percentages, bold the key growth metrics, and suggest follow-up questions. Response should be in AUD for any dollar values and percentages for growth.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "Which brand has the highest margin percentage in the Car Seats category?",
+    "ground_truth_output": "The agent should query margin data for Car Seats and identify the top brand by margin percentage. Response should bold the brand name and margin percentage, and suggest follow-up analysis.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "What is the DIFOT performance for Huggies in fiscal year 2026?",
+    "ground_truth_output": "The agent should query supplier DIFOT data filtered to Huggies brand and fiscal year 2026, returning delivery performance metrics. Response should bold the DIFOT percentage.",
+    "ground_truth_invocations": [{"tool_input": "What is the DIFOT performance for Huggies in fiscal year 2026?", "tool_name": "category_intelligence"}]
+  },
+  {
+    "input_query": "What promotion mechanics does Huggies use in the Nappies & Wipes category?",
+    "ground_truth_output": "The agent should query promotional effectiveness data filtered to Huggies brand and Nappies & Wipes category to list promotion mechanics. Mechanics include % Off, Bundle, GWP, BOGO, and Multi-buy. Response should list the mechanics clearly.",
+    "ground_truth_invocations": [{"tool_input": "What promotion mechanics does Huggies use in Nappies & Wipes?", "tool_name": "category_intelligence"}]
+  },
+  {
+    "input_query": "What promotion mechanics are used for Bugaboo in the Prams & Strollers category?",
+    "ground_truth_output": "The agent should query promotional effectiveness data filtered to Bugaboo brand and Prams & Strollers category to list the specific promotion mechanics used.",
+    "ground_truth_invocations": [{"tool_input": "What promotion mechanics are used for Bugaboo in Prams & Strollers?", "tool_name": "category_intelligence"}]
+  },
+  {
+    "input_query": "Which brands are losing the most customers in the Nappies & Wipes category based on brand switching data?",
+    "ground_truth_output": "The agent should query brand switching data for Nappies & Wipes, identifying brands with highest outgoing switch counts (FROM_BRAND). Response should bold key brand names and metrics.",
+    "ground_truth_invocations": [{"tool_input": "Which brands are losing the most customers in Nappies & Wipes based on brand switching?", "tool_name": "category_intelligence"}]
+  },
+  {
+    "input_query": "Which brand are customers switching to most in the Car Seats category?",
+    "ground_truth_output": "The agent should query brand switching data for Car Seats, aggregate by TO_BRAND to find the brand receiving the most customer switches. Response should bold the brand name and switch count, and suggest follow-up questions about switching patterns.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "Which customer segment spends the most on Prams & Strollers?",
+    "ground_truth_output": "The agent should query customer segment performance data for Prams & Strollers and identify the highest-spending segment. Segments include First-time Parents, Second-time Parents, Gift Buyers, Grandparents, Expecting, and Registry Shoppers. Response should bold the segment name and key spending metric in AUD.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "Compare competitive pricing for Car Seats brands at Coles versus Woolworths in fiscal year 2025.",
+    "ground_truth_output": "The agent should query competitive positioning data filtered to Car Seats, Coles and Woolworths competitors, and fiscal year 2025. Response should present pricing comparisons between the two retailers with bold key price gaps in AUD or percentages.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "How many stores sell Clothing products in Victoria?",
+    "ground_truth_output": "The agent should query the sellthrough data filtered to Clothing category and VIC state to count distinct stores. Response should lead with the store count number.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "Which stores in QLD carry Prams & Strollers brands?",
+    "ground_truth_output": "The agent should query the sellthrough data filtered to QLD state and Prams & Strollers category to list distinct store names. Response should provide the store names clearly.",
+    "ground_truth_invocations": null
+  },
+  {
+    "input_query": "List the brands in the Feeding category that are sold in NSW stores in Metro regions.",
+    "ground_truth_output": "The agent should query sellthrough data filtered to Feeding category, NSW state, and Metro region to list distinct brand names.",
+    "ground_truth_invocations": [{"tool_input": "List brands in Feeding category sold in NSW Metro stores", "tool_name": "category_intelligence"}]
+  },
+  {
+    "input_query": "Tell me about the weather forecast for Sydney this week.",
+    "ground_truth_output": "The agent should decline this request and state that weather information is outside its capabilities. It should explain it only handles Baby Mart category performance analytics (sales, margins, growth, pricing, promotions, CLV, brand switching, DIFOT). It should NOT fabricate weather data and should suggest what questions it can help with.",
+    "ground_truth_invocations": null
+  }
+]
