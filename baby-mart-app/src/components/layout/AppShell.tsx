@@ -8,7 +8,7 @@ import { AudienceProvider } from "@/context/AudienceContext";
 import {
   LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck,
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
-  DollarSign, BarChart3, FileText,
+  DollarSign, Sparkles,
 } from "lucide-react";
 
 const categories = [
@@ -144,8 +144,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/agent" icon={Bot} label="Category Agent" color="blue" />
                   <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Vendor Economics</div>
                   <NavItem href="/vendor/profitability" icon={DollarSign} label="Vendor Profitability" color="blue" />
-                  <NavItem href="/vendor/benchmarking" icon={BarChart3} label="Vendor Matrix" color="blue" />
-                  <NavItem href="/vendor/scorecard" icon={FileText} label="Vendor Scorecard" color="blue" />
                 </>
               ) : persona === "supply" ? (
                 <>
@@ -166,6 +164,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Activation</div>
                   <NavItem href="/campaigns/offers" icon={Gift} label="Offers & Budget" color="amber" />
                   <NavItem href="/campaigns" icon={Megaphone} label="Campaigns" color="amber" />
+                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">ML Models</div>
+                  <NavItem href="/campaigns/recommendations" icon={Sparkles} label="Product Recs" color="amber" />
                 </>
               )}
             </nav>

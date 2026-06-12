@@ -69,13 +69,14 @@ export async function GET() {
       ORDER BY c.revenue DESC
     `;
 
-    // Top brands by growth
+    // Top brands by growth (with margin for matrix chart)
     const brandsSql = `
       WITH current_brands AS (
         SELECT 
           db.BRAND_NAME,
           dp.CATEGORY,
-          SUM(f.NET_REVENUE) AS revenue
+          SUM(f.NET_REVENUE) AS revenue,
+          AVG(f.MARGIN_AMOUNT / NULLIF(f.NET_REVENUE, 0)) * 100 AS margin_pct
         FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES f
         JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT dp ON f.PRODUCT_KEY = dp.PRODUCT_KEY
         JOIN BABY_MART_DEMO.CURATED.DIM_BRAND db ON dp.BRAND_KEY = db.BRAND_KEY
@@ -96,10 +97,11 @@ export async function GET() {
         c.BRAND_NAME,
         c.CATEGORY,
         c.revenue,
+        c.margin_pct,
         ROUND((c.revenue - p.revenue) / NULLIF(p.revenue, 0) * 100, 1) AS growth_pct
       FROM current_brands c
       LEFT JOIN prior_brands p ON c.BRAND_NAME = p.BRAND_NAME
-      ORDER BY growth_pct DESC
+      ORDER BY c.revenue DESC
     `;
 
     const [kpiRows, catRows, brandRows] = await Promise.all([
@@ -125,19 +127,17 @@ export async function GET() {
       margin: Number(r.MARGIN_PCT)?.toFixed(1),
     }));
 
-    const topBrands = brandRows.slice(0, 5).map((r: any) => ({
+    const allBrands = brandRows.map((r: any) => ({
       name: r.BRAND_NAME,
       category: r.CATEGORY,
       revenue: Number(r.REVENUE),
+      margin: Number(r.MARGIN_PCT) || 0,
       growth: Number(r.GROWTH_PCT) || 0,
     }));
 
-    const bottomBrands = brandRows.slice(-5).reverse().map((r: any) => ({
-      name: r.BRAND_NAME,
-      category: r.CATEGORY,
-      revenue: Number(r.REVENUE),
-      growth: Number(r.GROWTH_PCT) || 0,
-    }));
+    const sortedByGrowth = [...allBrands].sort((a, b) => b.growth - a.growth);
+    const topBrands = sortedByGrowth.slice(0, 5);
+    const bottomBrands = sortedByGrowth.slice(-5).reverse();
 
     return NextResponse.json({
       totalRevenue: Number(kpi.CURRENT_REVENUE),
@@ -148,6 +148,7 @@ export async function GET() {
       revenueGrowth: Number(revenueGrowth),
       transactionGrowth: Number(txnGrowth),
       categories,
+      allBrands,
       topBrands,
       bottomBrands,
     });

@@ -64,78 +64,7 @@ const SEGMENT_MAP: Record<number, string> = {
   6: "Registry Shoppers",
 };
 
-// ─── In-memory campaigns ───────────────────────────────────────────────
-
-let campaigns = [
-  {
-    id: "camp-001",
-    name: "Crawler Nappies Surge — Loyalty Push",
-    status: "Active",
-    channel: "Email + SMS",
-    audience: "First-time Parents, NSW & QLD",
-    audienceSize: 18400,
-    sent: 18400,
-    opened: 7360,
-    clicked: 2944,
-    converted: 1178,
-    startDate: "2026-04-28",
-    endDate: "2026-05-26",
-    budget: 12000,
-    spent: 8450,
-    destination: "Braze",
-  },
-  {
-    id: "camp-002",
-    name: "Registry Completion — Expecting Mums",
-    status: "Draft",
-    channel: "Email",
-    audience: "Expecting, Registry Shoppers",
-    audienceSize: 24600,
-    sent: 0,
-    opened: 0,
-    clicked: 0,
-    converted: 0,
-    startDate: "2026-06-01",
-    endDate: "2026-06-30",
-    budget: 8000,
-    spent: 0,
-    destination: "Hightouch",
-  },
-  {
-    id: "camp-003",
-    name: "Back to Childcare — Toddler Essentials",
-    status: "Completed",
-    channel: "Email + SMS",
-    audience: "Second-time Parents, 25-44",
-    audienceSize: 31200,
-    sent: 31200,
-    opened: 14040,
-    clicked: 5616,
-    converted: 2493,
-    startDate: "2026-01-15",
-    endDate: "2026-02-15",
-    budget: 15000,
-    spent: 14200,
-    destination: "Braze",
-  },
-  {
-    id: "camp-004",
-    name: "Gold Member Early Access — Winter Sale",
-    status: "Paused",
-    channel: "App Push",
-    audience: "Gold & Platinum members",
-    audienceSize: 12800,
-    sent: 12800,
-    opened: 8960,
-    clicked: 3840,
-    converted: 1536,
-    startDate: "2026-05-01",
-    endDate: "2026-05-31",
-    budget: 5000,
-    spent: 3200,
-    destination: "Braze",
-  },
-];
+// ─── Campaigns are stored in BABY_MART_DEMO.ANALYTICS.CAMPAIGNS ──────
 
 // ─── Offers ────────────────────────────────────────────────────────────
 
@@ -429,51 +358,87 @@ async function handleAudienceExport(req: NextRequest) {
   return NextResponse.json({ rows });
 }
 
+// ─── Campaign CRUD (Snowflake-backed) ─────────────────────────────────
+
 async function handleGetCampaigns() {
+  const rows = await querySnowflake(`
+    SELECT CAMPAIGN_ID, NAME, STATUS, CHANNEL, AUDIENCE, AUDIENCE_SIZE, 
+           SENT, OPENED, CLICKED, CONVERTED, START_DATE, END_DATE, BUDGET, SPENT, DESTINATION
+    FROM BABY_MART_DEMO.ANALYTICS.CAMPAIGNS
+    ORDER BY CREATED_AT DESC
+  `);
+  const campaigns = rows.map((r: any) => ({
+    id: r.CAMPAIGN_ID,
+    name: r.NAME,
+    status: r.STATUS,
+    channel: r.CHANNEL,
+    audience: r.AUDIENCE,
+    audienceSize: Number(r.AUDIENCE_SIZE),
+    sent: Number(r.SENT),
+    opened: Number(r.OPENED),
+    clicked: Number(r.CLICKED),
+    converted: Number(r.CONVERTED),
+    startDate: r.START_DATE ? String(r.START_DATE).split("T")[0] : "",
+    endDate: r.END_DATE ? String(r.END_DATE).split("T")[0] : "",
+    budget: Number(r.BUDGET),
+    spent: Number(r.SPENT),
+    destination: r.DESTINATION,
+  }));
   return NextResponse.json(campaigns);
 }
 
 async function handleCreateCampaign(req: NextRequest) {
   const body = await req.json();
-  const campaign = {
-    id: `camp-${randomUUID().replace(/-/g, "").slice(0, 6)}`,
-    name: body.name || "New Campaign",
-    status: "Activated",
-    channel: body.channel || "Email",
-    audience: body.audience || "",
-    audienceSize: body.audienceSize || 0,
-    sent: 0,
-    opened: 0,
-    clicked: 0,
-    converted: 0,
-    startDate: body.startDate || "",
-    endDate: body.endDate || "",
-    budget: body.budget || 0,
-    spent: 0,
-    destination: body.destination || "Braze",
-  };
-  campaigns.push(campaign);
-  return NextResponse.json(campaign);
+  const id = `camp-${randomUUID().replace(/-/g, "").slice(0, 6)}`;
+  const name = (body.name || "New Campaign").replace(/'/g, "''");
+  const channel = (body.channel || "Email").replace(/'/g, "''");
+  const audience = (body.audience || "").replace(/'/g, "''");
+  const audienceSize = body.audienceSize || 0;
+  const startDate = body.startDate || null;
+  const endDate = body.endDate || null;
+  const budget = body.budget || 0;
+  const destination = (body.destination || "Braze").replace(/'/g, "''");
+
+  await querySnowflake(`
+    INSERT INTO BABY_MART_DEMO.ANALYTICS.CAMPAIGNS 
+    (CAMPAIGN_ID, NAME, STATUS, CHANNEL, AUDIENCE, AUDIENCE_SIZE, START_DATE, END_DATE, BUDGET, DESTINATION)
+    VALUES ('${id}', '${name}', 'Draft', '${channel}', '${audience}', ${audienceSize}, 
+            ${startDate ? `'${startDate}'` : "NULL"}, ${endDate ? `'${endDate}'` : "NULL"}, 
+            ${budget}, '${destination}')
+  `);
+
+  return NextResponse.json({ id, name: body.name || "New Campaign", status: "Draft", channel: body.channel || "Email", audience: body.audience || "", audienceSize, sent: 0, opened: 0, clicked: 0, converted: 0, startDate: startDate || "", endDate: endDate || "", budget, spent: 0, destination: body.destination || "Braze" });
 }
 
 async function handleGetCampaignById(campaignId: string) {
-  const campaign = campaigns.find((c) => c.id === campaignId);
-  if (!campaign) {
-    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-  }
-  return NextResponse.json(campaign);
+  const rows = await querySnowflake(`
+    SELECT * FROM BABY_MART_DEMO.ANALYTICS.CAMPAIGNS WHERE CAMPAIGN_ID = '${campaignId.replace(/'/g, "''")}'
+  `);
+  if (rows.length === 0) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+  const r = rows[0];
+  return NextResponse.json({
+    id: r.CAMPAIGN_ID, name: r.NAME, status: r.STATUS, channel: r.CHANNEL, audience: r.AUDIENCE,
+    audienceSize: Number(r.AUDIENCE_SIZE), sent: Number(r.SENT), opened: Number(r.OPENED),
+    clicked: Number(r.CLICKED), converted: Number(r.CONVERTED),
+    startDate: r.START_DATE ? String(r.START_DATE).split("T")[0] : "", endDate: r.END_DATE ? String(r.END_DATE).split("T")[0] : "",
+    budget: Number(r.BUDGET), spent: Number(r.SPENT), destination: r.DESTINATION,
+  });
 }
 
 async function handleUpdateCampaign(req: NextRequest, campaignId: string) {
   const body = await req.json();
-  const campaign = campaigns.find((c) => c.id === campaignId);
-  if (!campaign) {
-    return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-  }
-  if (body.status) {
-    campaign.status = body.status;
-  }
-  return NextResponse.json(campaign);
+  const sets: string[] = [];
+  if (body.status) sets.push(`STATUS = '${body.status.replace(/'/g, "''")}'`);
+  if (body.name) sets.push(`NAME = '${body.name.replace(/'/g, "''")}'`);
+  if (sets.length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  await querySnowflake(`UPDATE BABY_MART_DEMO.ANALYTICS.CAMPAIGNS SET ${sets.join(", ")} WHERE CAMPAIGN_ID = '${campaignId.replace(/'/g, "''")}'`);
+  return handleGetCampaignById(campaignId);
+}
+
+async function handleDeleteCampaign(campaignId: string) {
+  await querySnowflake(`DELETE FROM BABY_MART_DEMO.ANALYTICS.CAMPAIGNS WHERE CAMPAIGN_ID = '${campaignId.replace(/'/g, "''")}'`);
+  return NextResponse.json({ success: true });
 }
 
 async function handleGetOffers() {
@@ -544,6 +509,21 @@ export async function PATCH(
   if (route.startsWith("campaigns/")) {
     const campaignId = path[1];
     return handleUpdateCampaign(req, campaignId);
+  }
+
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const { path } = await params;
+  const route = path.join("/");
+
+  if (route.startsWith("campaigns/")) {
+    const campaignId = path[1];
+    return handleDeleteCampaign(campaignId);
   }
 
   return NextResponse.json({ error: "Not found" }, { status: 404 });
