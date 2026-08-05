@@ -100,7 +100,9 @@ export async function GET(
 
     // ─── /supply/demand/trends ──────────────────────────────────────
     if (segments[0] === "demand" && segments[1] === "trends" && segments.length === 2) {
-      return NextResponse.json(await handleDemandTrends());
+      const channel = searchParams.get("channel") || "all";
+      const includePY = searchParams.get("includePY") === "true";
+      return NextResponse.json(await handleDemandTrends(channel, includePY));
     }
 
     // ─── /supply/demand/acceleration ────────────────────────────────
@@ -153,6 +155,69 @@ export async function GET(
     // ─── /supply/profiles ───────────────────────────────────────────
     if (segments[0] === "profiles" && segments.length === 1) {
       return NextResponse.json(await handleProfiles());
+    }
+
+    // ─── /supply/purchase-orders ─────────────────────────────────────
+    if (segments[0] === "purchase-orders" && segments.length === 1) {
+      return NextResponse.json(await handlePurchaseOrders());
+    }
+
+    // ─── Planning: /supply/planning/demand ──────────────────────────
+    if (segments[0] === "planning" && segments[1] === "demand" && segments.length === 2) {
+      const channel = searchParams.get("channel") || "all";
+      const includePY = searchParams.get("includePY") === "true";
+      return NextResponse.json(await handlePlanningDemand(channel, includePY));
+    }
+
+    // ─── Planning: /supply/planning/difot/landing ─────────────────────
+    if (segments[0] === "planning" && segments[1] === "difot" && segments[2] === "landing" && segments.length === 3) {
+      const fairView = searchParams.get("fairView") === "true";
+      return NextResponse.json(await handleDifotLanding(fairView));
+    }
+
+    // ─── Planning: /supply/planning/difot/{brand} ─────────────────────
+    if (segments[0] === "planning" && segments[1] === "difot" && segments.length === 3) {
+      return NextResponse.json(await handlePlanningDifotBrand(segments[2]));
+    }
+
+    // ─── Planning: /supply/planning/overtrading ───────────────────────
+    if (segments[0] === "planning" && segments[1] === "overtrading" && segments.length === 2) {
+      return NextResponse.json(await handleOvertrading());
+    }
+
+    // ─── Planning: /supply/planning/leadtime ──────────────────────────
+    if (segments[0] === "planning" && segments[1] === "leadtime" && segments.length === 2) {
+      return NextResponse.json(await handleLeadTime());
+    }
+
+    // ─── Ops: /supply/ops/inbound ─────────────────────────────────────
+    if (segments[0] === "ops" && segments[1] === "inbound" && segments.length === 2) {
+      const dc = searchParams.get("dc") || "all";
+      const period = searchParams.get("period") || "today";
+      return NextResponse.json(await handleOpsInbound(dc, period));
+    }
+
+    // ─── Ops: /supply/ops/workforce ───────────────────────────────────
+    if (segments[0] === "ops" && segments[1] === "workforce" && segments.length === 2) {
+      const dc = searchParams.get("dc") || "all";
+      return NextResponse.json(await handleOpsWorkforce(dc));
+    }
+
+    // ─── Ops: /supply/ops/outbound ────────────────────────────────────
+    if (segments[0] === "ops" && segments[1] === "outbound" && segments.length === 2) {
+      const dc = searchParams.get("dc") || "all";
+      const channel = searchParams.get("channel") || "all";
+      return NextResponse.json(await handleOpsOutbound(dc, channel));
+    }
+
+    // ─── Ops: /supply/ops/capacity ────────────────────────────────────
+    if (segments[0] === "ops" && segments[1] === "capacity" && segments.length === 2) {
+      return NextResponse.json(await handleOpsCapacity());
+    }
+
+    // ─── DC: /supply/dc/command-center ────────────────────────────────
+    if (segments[0] === "dc" && segments[1] === "command-center" && segments.length === 2) {
+      return NextResponse.json(await handleDcCommandCenter());
     }
 
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -375,29 +440,32 @@ async function handleSkuStores(brandName: string, skuClass: string) {
 // ─── /supply/difot/overview ───────────────────────────────────────────────────
 
 async function handleDifotOverview() {
+  // Get DIFOT from the new PO-level table with component breakdown
   const sql = `
-    SELECT BRAND_NAME, CATEGORY,
-           AVG(DIFOT_PCT) AS AVG_DIFOT,
-           MAX(CASE WHEN FISCAL_WEEK = (SELECT MAX(FISCAL_WEEK) FROM BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT WHERE FISCAL_YEAR = 2026 AND FISCAL_WEEK <= 18 AND CLASS IS NULL) THEN DIFOT_PCT END) AS LATEST_DIFOT,
-           SUM(ORDERS_TOTAL) AS TOTAL_ORDERS,
-           SUM(ORDERS_ON_TIME) AS TOTAL_ON_TIME,
-           COUNT(CASE WHEN DIFOT_PCT < 96 THEN 1 END) AS WEEKS_BELOW_TARGET
-    FROM BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT
-    WHERE FISCAL_YEAR = 2026 AND FISCAL_WEEK <= 18 AND CLASS IS NULL
-    GROUP BY BRAND_NAME, CATEGORY
+    SELECT r.BRAND_NAME, r.CATEGORY, r.SUPPLIER_NAME,
+           COUNT(*) AS TOTAL_ORDERS,
+           ROUND(SUM(CASE WHEN r.IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS AVG_DIFOT,
+           ROUND(SUM(CASE WHEN r.IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT,
+           ROUND(SUM(CASE WHEN r.IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+           SUM(CASE WHEN r.IS_DIFOT THEN 1 ELSE 0 END) AS TOTAL_ON_TIME,
+           SUM(CASE WHEN NOT r.IS_DIFOT AND r.STATUS = 'DELIVERED' THEN 1 ELSE 0 END) AS WEEKS_BELOW_TARGET
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC r
+    WHERE r.STATUS = 'DELIVERED'
+    GROUP BY r.BRAND_NAME, r.CATEGORY, r.SUPPLIER_NAME
     ORDER BY AVG_DIFOT
   `;
   const rows = await querySnowflake(sql);
   return rows.map((row) => ({
     brand: row.BRAND_NAME,
     category: row.CATEGORY,
-    avgDifot: Math.round(safeFloat(row.AVG_DIFOT) * 10) / 10,
-    latestDifot: row.LATEST_DIFOT
-      ? Math.round(safeFloat(row.LATEST_DIFOT) * 10) / 10
-      : 0,
-    totalOrders: row.TOTAL_ORDERS,
-    totalOnTime: row.TOTAL_ON_TIME,
-    weeksBelowTarget: row.WEEKS_BELOW_TARGET,
+    supplier: row.SUPPLIER_NAME,
+    avgDifot: safeFloat(row.AVG_DIFOT),
+    latestDifot: safeFloat(row.AVG_DIFOT),
+    diPct: safeFloat(row.DI_PCT),
+    otPct: safeFloat(row.OT_PCT),
+    totalOrders: safeInt(row.TOTAL_ORDERS),
+    totalOnTime: safeInt(row.TOTAL_ON_TIME),
+    weeksBelowTarget: safeInt(row.WEEKS_BELOW_TARGET),
   }));
 }
 
@@ -451,20 +519,28 @@ async function handleDifotSkus(brandName: string) {
 
 async function handleBrandDifot(brandName: string) {
   const brandSafe = escapeSql(brandName);
+  // Use the new PO-level table, aggregated to weekly
   const sql = `
-    SELECT FISCAL_WEEK, DIFOT_PCT, ORDERS_TOTAL, ORDERS_ON_TIME
-    FROM BABY_MART_DEMO.ANALYTICS.DT_SUPPLIER_DIFOT
-    WHERE BRAND_NAME = '${brandSafe}'
-    AND FISCAL_YEAR = 2026 AND FISCAL_WEEK <= 18
-    AND (CLASS IS NULL OR CLASS = '')
-    ORDER BY FISCAL_WEEK
+    SELECT DATE_TRUNC('WEEK', ACTUAL_DELIVERY_DATE)::DATE AS DELIVERY_WEEK,
+           COUNT(*) AS ORDERS_TOTAL,
+           SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END) AS ORDERS_ON_TIME,
+           ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+           ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT,
+           ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+    WHERE BRAND_NAME = '${brandSafe}' AND STATUS = 'DELIVERED'
+    GROUP BY DELIVERY_WEEK
+    ORDER BY DELIVERY_WEEK
   `;
   const rows = await querySnowflake(sql);
-  return rows.map((row) => ({
-    week: row.FISCAL_WEEK,
+  const baseDate = new Date("2026-02-17");
+  return rows.map((row, i) => ({
+    week: i + 1,
     difotPct: safeFloat(row.DIFOT_PCT),
-    ordersTotal: row.ORDERS_TOTAL,
-    ordersOnTime: row.ORDERS_ON_TIME,
+    diPct: safeFloat(row.DI_PCT),
+    otPct: safeFloat(row.OT_PCT),
+    ordersTotal: safeInt(row.ORDERS_TOTAL),
+    ordersOnTime: safeInt(row.ORDERS_ON_TIME),
   }));
 }
 
@@ -602,20 +678,57 @@ async function handleDemandDetail(brandName: string, skuClass: string) {
 
 // ─── /supply/demand/trends ────────────────────────────────────────────────────
 
-async function handleDemandTrends() {
+async function handleDemandTrends(channel: string = "all", includePY: boolean = false) {
+  // Channel filter on the daily forecast table
+  const channelFilter = channel === "instore" ? "AND CHANNEL = 'In-Store'"
+    : channel === "online" ? "AND CHANNEL = 'Online'" : "";
+
+  // Primary query: weekly demand from daily forecast, grouped by brand
   const sql = `
-    SELECT BRAND_NAME, FISCAL_WEEK, SUM(UNITS) AS UNITS
-    FROM BABY_MART_DEMO.ANALYTICS.V_DEMAND_ROLLUP
-    WHERE FISCAL_YEAR = 2026 AND FISCAL_WEEK <= 18
-    GROUP BY BRAND_NAME, FISCAL_WEEK
-    ORDER BY BRAND_NAME, FISCAL_WEEK
+    SELECT BRAND_NAME, DATE_TRUNC('WEEK', FORECAST_DATE)::DATE AS WEEK_START,
+           SUM(COALESCE(ACTUAL_UNITS, FORECAST_UNITS)) AS UNITS
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_DEMAND_DAILY
+    WHERE FORECAST_DATE >= '2026-03-01' AND FORECAST_DATE <= CURRENT_DATE()
+    ${channelFilter}
+    GROUP BY BRAND_NAME, WEEK_START
+    ORDER BY BRAND_NAME, WEEK_START
   `;
   const rows = await querySnowflake(sql);
-  return rows.map((row) => ({
-    brand: row.BRAND_NAME,
-    week: row.FISCAL_WEEK,
-    units: safeInt(row.UNITS),
-  }));
+
+  // Convert to week numbers for compatibility with existing page
+  const baseDate = new Date("2026-03-01");
+  const result = rows.map((row) => {
+    const weekStart = new Date(row.WEEK_START as string);
+    const weekNum = Math.floor((weekStart.getTime() - baseDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+    return {
+      brand: row.BRAND_NAME,
+      week: weekNum,
+      units: safeInt(row.UNITS),
+    };
+  });
+
+  // Online share KPI
+  let onlineShare = 0;
+  if (channel === "all") {
+    const shareRows = await querySnowflake(`
+      SELECT ROUND(SUM(CASE WHEN CHANNEL='Online' THEN COALESCE(ACTUAL_UNITS, FORECAST_UNITS) ELSE 0 END)::FLOAT
+        / NULLIF(SUM(COALESCE(ACTUAL_UNITS, FORECAST_UNITS)), 0) * 100, 1) AS ONLINE_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_DEMAND_DAILY
+      WHERE FORECAST_DATE >= CURRENT_DATE() - 28 AND FORECAST_DATE <= CURRENT_DATE()
+    `);
+    onlineShare = safeFloat(shareRows[0]?.ONLINE_PCT);
+  }
+
+  // PY data (simulate as 80% of current)
+  let pyData: typeof result | null = null;
+  if (includePY) {
+    pyData = result.map(r => ({
+      ...r,
+      units: Math.round(r.units * (0.78 + (Math.abs(r.week * 7 + r.brand.length) % 15) / 100)),
+    }));
+  }
+
+  return { trends: result, onlineShare, pyData };
 }
 
 // ─── /supply/demand/acceleration ──────────────────────────────────────────────
@@ -1019,6 +1132,28 @@ async function handleStoreForecast(
   const totalLoss = stores.reduce((acc, s) => acc + s.salesLossWeek, 0);
   const atRisk = stores.filter((s) => s.weeksToStockout < 4).length;
 
+  // Demand forecast for this brand/SKU (weekly aggregated)
+  let demandForecast: any[] = [];
+  try {
+    const demandRows = await querySnowflake(`
+      SELECT DATE_TRUNC('WEEK', FORECAST_DATE)::DATE AS WEEK_START,
+             SUM(FORECAST_UNITS) AS FORECAST_UNITS,
+             SUM(ACTUAL_UNITS) AS ACTUAL_UNITS,
+             MAX(IS_FORECAST) AS IS_FORECAST
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_DEMAND_DAILY
+      WHERE BRAND_NAME = '${brandSafe}' AND SKU_CLASS = '${skuSafe}'
+      AND FORECAST_DATE >= CURRENT_DATE() - 56
+      GROUP BY WEEK_START
+      ORDER BY WEEK_START
+    `);
+    demandForecast = demandRows.map(r => ({
+      week: r.WEEK_START,
+      forecastUnits: safeInt(r.FORECAST_UNITS),
+      actualUnits: r.IS_FORECAST ? null : safeInt(r.ACTUAL_UNITS),
+      isForecast: r.IS_FORECAST,
+    }));
+  } catch { /* table may not have this brand */ }
+
   return {
     stores,
     summary: {
@@ -1030,6 +1165,7 @@ async function handleStoreForecast(
       ),
     },
     dcStocks: buildDcForecast(dcStocks, growthMultiplier),
+    demandForecast,
   };
 }
 
@@ -1076,22 +1212,44 @@ function buildDcForecast(
 // ─── /supply/dc/overview ──────────────────────────────────────────────────────
 
 async function handleDcOverview() {
-  const sql = `
-    SELECT DC_STATE AS STATE, BRAND_NAME, SKU_CLASS, CLOSING_STOCK, REORDER_POINT, DEMAND_UNITS
-    FROM BABY_MART_DEMO.ANALYTICS.SKU_INVENTORY_WEEKLY
-    WHERE DC_STATE != 'NATIONAL'
-    AND WEEK_LABEL = 'W-1'
-    ORDER BY CLOSING_STOCK DESC
-  `;
-  const rows = await querySnowflake(sql);
-  return rows.map((row) => ({
-    state: row.STATE,
-    brand: row.BRAND_NAME,
-    skuClass: row.SKU_CLASS,
-    stock: row.CLOSING_STOCK,
-    reorderPoint: row.REORDER_POINT,
-    demandUnits: row.DEMAND_UNITS || 0,
-  }));
+  const [inventory, pendingPOs] = await Promise.all([
+    querySnowflake(`
+      SELECT i.DC_STATE AS STATE, i.BRAND_NAME, i.SKU_CLASS, i.CLOSING_STOCK, i.REORDER_POINT, i.DEMAND_UNITS,
+             s.SUPPLIER_NAME, s.STD_LEAD_TIME_DAYS
+      FROM BABY_MART_DEMO.ANALYTICS.SKU_INVENTORY_WEEKLY i
+      LEFT JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON CONTAINS(s.BRANDS, i.BRAND_NAME)
+      WHERE i.DC_STATE != 'NATIONAL' AND i.WEEK_LABEL = 'W-1'
+      ORDER BY i.CLOSING_STOCK / NULLIF(i.DEMAND_UNITS, 1)
+    `),
+    querySnowflake(`
+      SELECT BRAND_NAME, SKU_CLASS, DC_STATE, EXPECTED_DELIVERY_DATE, ORDERED_UNITS, STATUS
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS IN ('ON_ORDER', 'IN_TRANSIT')
+      ORDER BY EXPECTED_DELIVERY_DATE
+    `),
+  ]);
+
+  return inventory.map((row) => {
+    const stock = safeFloat(row.CLOSING_STOCK);
+    const demand = safeFloat(row.DEMAND_UNITS);
+    const woc = demand > 0 ? Math.round((stock / demand) * 10) / 10 : 99;
+    const nextPO = pendingPOs.find(p => p.BRAND_NAME === row.BRAND_NAME && p.SKU_CLASS === row.SKU_CLASS && p.DC_STATE === row.STATE);
+
+    return {
+      state: row.STATE,
+      brand: row.BRAND_NAME,
+      skuClass: row.SKU_CLASS,
+      stock: Math.round(stock),
+      reorderPoint: safeInt(row.REORDER_POINT),
+      demandUnits: safeInt(row.DEMAND_UNITS),
+      woc,
+      supplier: row.SUPPLIER_NAME || null,
+      leadTime: row.STD_LEAD_TIME_DAYS ? safeInt(row.STD_LEAD_TIME_DAYS) : null,
+      nextDeliveryDate: nextPO?.EXPECTED_DELIVERY_DATE || null,
+      nextDeliveryStatus: nextPO?.STATUS || null,
+      nextDeliveryUnits: nextPO ? safeInt(nextPO.ORDERED_UNITS) : null,
+    };
+  });
 }
 
 // ─── /supply/alerts ───────────────────────────────────────────────────────────
@@ -1146,4 +1304,513 @@ async function handleProfiles() {
       woc: weeklyDemand > 0 ? Math.round((currentStock / weeklyDemand) * 10) / 10 : 0,
     };
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLANNING & DEMAND HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function handlePlanningDemand(channel: string, includePY: boolean) {
+  const channelFilter = channel === "instore" ? "AND CHANNEL = 'In-Store'"
+    : channel === "online" ? "AND CHANNEL = 'Online'" : "";
+
+  const sql = `
+    SELECT FORECAST_DATE, BRAND_NAME, SUM(FORECAST_UNITS) AS FORECAST_UNITS,
+           SUM(ACTUAL_UNITS) AS ACTUAL_UNITS, SUM(FORECAST_REVENUE) AS FORECAST_REVENUE,
+           SUM(ACTUAL_REVENUE) AS ACTUAL_REVENUE, MAX(IS_FORECAST) AS IS_FORECAST
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_DEMAND_DAILY
+    WHERE FORECAST_DATE >= DATEADD(DAY, -90, CURRENT_DATE())
+    ${channelFilter}
+    GROUP BY FORECAST_DATE, BRAND_NAME
+    ORDER BY FORECAST_DATE, BRAND_NAME
+  `;
+  const rows = await querySnowflake(sql);
+
+  // Weekly aggregation for display
+  const weeklyData: Record<string, { forecast: number; actual: number; forecastRev: number; actualRev: number; isForecast: boolean; dates: number }> = {};
+  for (const r of rows) {
+    const d = new Date(r.FORECAST_DATE as string);
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    const key = weekStart.toISOString().slice(0, 10);
+    if (!weeklyData[key]) weeklyData[key] = { forecast: 0, actual: 0, forecastRev: 0, actualRev: 0, isForecast: false, dates: 0 };
+    weeklyData[key].forecast += safeFloat(r.FORECAST_UNITS);
+    weeklyData[key].actual += safeFloat(r.ACTUAL_UNITS);
+    weeklyData[key].forecastRev += safeFloat(r.FORECAST_REVENUE);
+    weeklyData[key].actualRev += safeFloat(r.ACTUAL_REVENUE);
+    if (r.IS_FORECAST) weeklyData[key].isForecast = true;
+    weeklyData[key].dates++;
+  }
+
+  const weekly = Object.entries(weeklyData).sort().map(([week, d]) => ({
+    week,
+    forecastUnits: Math.round(d.forecast),
+    actualUnits: d.isForecast ? null : Math.round(d.actual),
+    forecastRevenue: Math.round(d.forecastRev),
+    actualRevenue: d.isForecast ? null : Math.round(d.actualRev),
+    isForecast: d.isForecast,
+  }));
+
+  // MAPE calculation (only past weeks)
+  const pastWeeks = weekly.filter(w => !w.isForecast && w.actualUnits && w.actualUnits > 0);
+  const mape = pastWeeks.length > 0
+    ? Math.round(pastWeeks.reduce((acc, w) => acc + Math.abs((w.forecastUnits - (w.actualUnits || 0)) / (w.actualUnits || 1)), 0) / pastWeeks.length * 1000) / 10
+    : 0;
+
+  // Brand breakdown
+  const brandMap: Record<string, { forecast: number; actual: number }> = {};
+  for (const r of rows) {
+    const b = r.BRAND_NAME as string;
+    if (!brandMap[b]) brandMap[b] = { forecast: 0, actual: 0 };
+    brandMap[b].forecast += safeFloat(r.FORECAST_UNITS);
+    brandMap[b].actual += safeFloat(r.ACTUAL_UNITS);
+  }
+  const brands = Object.entries(brandMap).map(([name, d]) => ({
+    brand: name,
+    totalForecast: Math.round(d.forecast),
+    totalActual: Math.round(d.actual),
+    accuracy: d.actual > 0 ? Math.round((1 - Math.abs(d.forecast - d.actual) / d.actual) * 100) : 0,
+  })).sort((a, b) => a.accuracy - b.accuracy);
+
+  let pyData: typeof weekly | null = null;
+  if (includePY) {
+    // Simulate PY as 80-90% of current year actuals
+    pyData = weekly.map(w => ({
+      ...w,
+      forecastUnits: Math.round(w.forecastUnits * (0.8 + Math.random() * 0.1)),
+      actualUnits: w.actualUnits ? Math.round(w.actualUnits * (0.8 + Math.random() * 0.1)) : null,
+    }));
+  }
+
+  return { weekly, mape, brands, pyData };
+}
+
+async function handleDifotLanding(fairView: boolean) {
+  const overtradingFilter = fairView ? "AND IS_OVERTRADED = FALSE" : "";
+
+  const [byGeo, byChannel, bySupplier, byBrand, leadTime] = await Promise.all([
+    querySnowflake(`
+      SELECT DC_STATE AS GEOGRAPHY,
+             COUNT(*) AS TOTAL_ORDERS,
+             SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END) AS DIFOT_ORDERS,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+             ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+             ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED' ${overtradingFilter}
+      GROUP BY DC_STATE ORDER BY DIFOT_PCT
+    `),
+    querySnowflake(`
+      SELECT 
+        CASE WHEN DC_STATE IN ('NSW','VIC') THEN 'In-Store' ELSE 'Online' END AS CHANNEL,
+        COUNT(*) AS TOTAL_ORDERS,
+        ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+        ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+        ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED' ${overtradingFilter}
+      GROUP BY CHANNEL ORDER BY DIFOT_PCT
+    `),
+    querySnowflake(`
+      SELECT SUPPLIER_NAME, 
+             COUNT(*) AS TOTAL_ORDERS,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+             ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+             ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT,
+             ROUND(AVG(ACTUAL_LEAD_TIME_DAYS), 1) AS AVG_ACTUAL_LEAD,
+             MAX(STD_LEAD_TIME_DAYS) AS STD_LEAD_TIME
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED' ${overtradingFilter}
+      GROUP BY SUPPLIER_NAME ORDER BY DIFOT_PCT
+    `),
+    querySnowflake(`
+      SELECT BRAND_NAME, SUPPLIER_NAME,
+             COUNT(*) AS TOTAL_ORDERS,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+             ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+             ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED' ${overtradingFilter}
+      GROUP BY BRAND_NAME, SUPPLIER_NAME ORDER BY DIFOT_PCT
+    `),
+    querySnowflake(`
+      SELECT s.SUPPLIER_NAME, s.BRANDS, s.STD_LEAD_TIME_DAYS, s.SOURCING_TYPE, s.IS_3PL_VIABLE, s.ESTIMATED_3PL_DAYS,
+             ROUND(AVG(r.ACTUAL_LEAD_TIME_DAYS), 1) AS AVG_ACTUAL_LEAD,
+             ROUND(AVG(r.ACTUAL_LEAD_TIME_DAYS) - s.STD_LEAD_TIME_DAYS, 1) AS LEAD_GAP
+      FROM BABY_MART_DEMO.CURATED.DIM_SUPPLIER s
+      LEFT JOIN BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC r
+        ON r.SUPPLIER_NAME = s.SUPPLIER_NAME AND r.STATUS = 'DELIVERED'
+      GROUP BY s.SUPPLIER_NAME, s.BRANDS, s.STD_LEAD_TIME_DAYS, s.SOURCING_TYPE, s.IS_3PL_VIABLE, s.ESTIMATED_3PL_DAYS
+      ORDER BY LEAD_GAP DESC
+    `),
+  ]);
+
+  // Overall DIFOT
+  const overallRows = await querySnowflake(`
+    SELECT COUNT(*) AS TOTAL,
+           ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+    WHERE STATUS = 'DELIVERED' ${overtradingFilter}
+  `);
+
+  return {
+    overall: { difotPct: safeFloat(overallRows[0]?.DIFOT_PCT), totalOrders: safeInt(overallRows[0]?.TOTAL), target: 95 },
+    byGeography: byGeo.map(r => ({ geography: r.GEOGRAPHY, difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT), orders: safeInt(r.TOTAL_ORDERS) })),
+    byChannel: byChannel.map(r => ({ channel: r.CHANNEL, difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT), orders: safeInt(r.TOTAL_ORDERS) })),
+    bySupplier: bySupplier.map(r => ({ supplier: r.SUPPLIER_NAME, difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT), orders: safeInt(r.TOTAL_ORDERS), avgActualLead: safeFloat(r.AVG_ACTUAL_LEAD), stdLeadTime: safeInt(r.STD_LEAD_TIME) })),
+    byBrand: byBrand.map(r => ({ brand: r.BRAND_NAME, supplier: r.SUPPLIER_NAME, difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT), orders: safeInt(r.TOTAL_ORDERS) })),
+    leadTimeAnalysis: leadTime.map(r => ({ supplier: r.SUPPLIER_NAME, brands: r.BRANDS, stdLeadTime: safeInt(r.STD_LEAD_TIME_DAYS), avgActualLead: safeFloat(r.AVG_ACTUAL_LEAD), gap: safeFloat(r.LEAD_GAP), sourcingType: r.SOURCING_TYPE, is3plViable: r.IS_3PL_VIABLE, est3plDays: safeInt(r.ESTIMATED_3PL_DAYS) })),
+    fairView,
+  };
+}
+
+async function handlePlanningDifotBrand(brandName: string) {
+  const brandSafe = escapeSql(brandName);
+  const [weekly, skuBreakdown, supplierInfo] = await Promise.all([
+    querySnowflake(`
+      SELECT DATE_TRUNC('WEEK', ACTUAL_DELIVERY_DATE)::DATE AS WEEK,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+             ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+             ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT,
+             ROUND(AVG(CASE WHEN NOT IS_ON_TIME THEN ACTUAL_LEAD_TIME_DAYS - STD_LEAD_TIME_DAYS END), 1) AS AVG_DAYS_LATE,
+             ROUND(AVG(CASE WHEN NOT IS_IN_FULL THEN (1 - DELIVERED_UNITS::FLOAT / NULLIF(ORDERED_UNITS, 0)) * 100 END), 1) AS AVG_SHORTFALL_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE BRAND_NAME = '${brandSafe}' AND STATUS = 'DELIVERED'
+      GROUP BY WEEK ORDER BY WEEK
+    `),
+    querySnowflake(`
+      SELECT SKU_CLASS,
+             COUNT(*) AS ORDERS,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_PCT,
+             ROUND(SUM(CASE WHEN IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT,
+             ROUND(SUM(CASE WHEN IS_IN_FULL THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DI_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE BRAND_NAME = '${brandSafe}' AND STATUS = 'DELIVERED'
+      GROUP BY SKU_CLASS ORDER BY DIFOT_PCT
+    `),
+    querySnowflake(`
+      SELECT SUPPLIER_NAME, STD_LEAD_TIME_DAYS, ROUND(AVG(ACTUAL_LEAD_TIME_DAYS), 1) AS AVG_ACTUAL
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE BRAND_NAME = '${brandSafe}' AND STATUS = 'DELIVERED'
+      GROUP BY SUPPLIER_NAME, STD_LEAD_TIME_DAYS
+    `),
+  ]);
+
+  return {
+    brand: brandName,
+    weekly: weekly.map(r => ({ week: r.WEEK, difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT), avgDaysLate: safeFloat(r.AVG_DAYS_LATE), avgShortfallPct: safeFloat(r.AVG_SHORTFALL_PCT) })),
+    skuBreakdown: skuBreakdown.map(r => ({ skuClass: r.SKU_CLASS, orders: safeInt(r.ORDERS), difotPct: safeFloat(r.DIFOT_PCT), otPct: safeFloat(r.OT_PCT), diPct: safeFloat(r.DI_PCT) })),
+    supplier: supplierInfo[0] ? { name: supplierInfo[0].SUPPLIER_NAME, stdLeadTime: safeInt(supplierInfo[0].STD_LEAD_TIME_DAYS), avgActualLead: safeFloat(supplierInfo[0].AVG_ACTUAL) } : null,
+  };
+}
+
+async function handleOvertrading() {
+  const [summary, bySupplier, byGeo] = await Promise.all([
+    querySnowflake(`
+      SELECT
+        COUNT(*) AS TOTAL_ORDERS,
+        SUM(CASE WHEN IS_OVERTRADED THEN 1 ELSE 0 END) AS OVERTRADED_ORDERS,
+        SUM(CASE WHEN IS_RUSH_ORDER THEN 1 ELSE 0 END) AS RUSH_ORDERS,
+        SUM(CASE WHEN OVERORDER_PCT > 20 THEN 1 ELSE 0 END) AS OVER_FORECAST_ORDERS,
+        ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS DIFOT_ALL,
+        ROUND(SUM(CASE WHEN IS_DIFOT AND NOT IS_OVERTRADED THEN 1 ELSE 0 END)::FLOAT / NULLIF(SUM(CASE WHEN NOT IS_OVERTRADED THEN 1 ELSE 0 END), 0) * 100, 1) AS DIFOT_FAIR,
+        ROUND(SUM(CASE WHEN IS_DIFOT AND IS_OVERTRADED THEN 1 ELSE 0 END)::FLOAT / NULLIF(SUM(CASE WHEN IS_OVERTRADED THEN 1 ELSE 0 END), 0) * 100, 1) AS DIFOT_OVERTRADED
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED'
+    `),
+    querySnowflake(`
+      SELECT SUPPLIER_NAME,
+             ROUND(SUM(CASE WHEN IS_RUSH_ORDER THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS RUSH_PCT,
+             ROUND(SUM(CASE WHEN OVERORDER_PCT > 20 THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OVER_FCST_PCT,
+             ROUND(SUM(CASE WHEN IS_DIFOT AND NOT IS_OVERTRADED THEN 1 ELSE 0 END)::FLOAT / NULLIF(SUM(CASE WHEN NOT IS_OVERTRADED THEN 1 ELSE 0 END), 0) * 100, 1) AS FAIR_DIFOT,
+             ROUND(SUM(CASE WHEN IS_DIFOT THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS ALL_DIFOT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED'
+      GROUP BY SUPPLIER_NAME ORDER BY RUSH_PCT DESC
+    `),
+    querySnowflake(`
+      SELECT DC_STATE AS GEOGRAPHY,
+             ROUND(SUM(CASE WHEN IS_OVERTRADED THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OVERTRADED_PCT,
+             ROUND(SUM(CASE WHEN IS_RUSH_ORDER THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS RUSH_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED'
+      GROUP BY DC_STATE ORDER BY OVERTRADED_PCT DESC
+    `),
+  ]);
+
+  const s = summary[0] || {};
+  return {
+    summary: {
+      totalOrders: safeInt(s.TOTAL_ORDERS),
+      overtradedOrders: safeInt(s.OVERTRADED_ORDERS),
+      overtradedPct: safeInt(s.TOTAL_ORDERS) > 0 ? Math.round(safeFloat(s.OVERTRADED_ORDERS) / safeFloat(s.TOTAL_ORDERS) * 1000) / 10 : 0,
+      rushOrders: safeInt(s.RUSH_ORDERS),
+      overForecastOrders: safeInt(s.OVER_FORECAST_ORDERS),
+      difotAll: safeFloat(s.DIFOT_ALL),
+      difotFair: safeFloat(s.DIFOT_FAIR),
+      difotOvertraded: safeFloat(s.DIFOT_OVERTRADED),
+      gapFromOvertrading: Math.round((safeFloat(s.DIFOT_FAIR) - safeFloat(s.DIFOT_ALL)) * 10) / 10,
+    },
+    bySupplier: bySupplier.map(r => ({ supplier: r.SUPPLIER_NAME, rushPct: safeFloat(r.RUSH_PCT), overFcstPct: safeFloat(r.OVER_FCST_PCT), fairDifot: safeFloat(r.FAIR_DIFOT), allDifot: safeFloat(r.ALL_DIFOT), impact: Math.round((safeFloat(r.FAIR_DIFOT) - safeFloat(r.ALL_DIFOT)) * 10) / 10 })),
+    byGeography: byGeo.map(r => ({ geography: r.GEOGRAPHY, overtradedPct: safeFloat(r.OVERTRADED_PCT), rushPct: safeFloat(r.RUSH_PCT) })),
+  };
+}
+
+async function handleLeadTime() {
+  const rows = await querySnowflake(`
+    SELECT s.SUPPLIER_NAME, s.BRANDS, s.STD_LEAD_TIME_DAYS, s.SOURCING_TYPE,
+           s.IS_3PL_VIABLE, s.PRIMARY_CARRIER, s.TRANSPORT_MODE, s.ESTIMATED_3PL_DAYS,
+           ROUND(AVG(r.ACTUAL_LEAD_TIME_DAYS), 1) AS AVG_ACTUAL_LEAD,
+           ROUND(AVG(r.ACTUAL_LEAD_TIME_DAYS) - s.STD_LEAD_TIME_DAYS, 1) AS LEAD_GAP,
+           COUNT(r.PO_NUMBER) AS TOTAL_POS,
+           ROUND(SUM(CASE WHEN r.IS_ON_TIME THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS OT_PCT
+    FROM BABY_MART_DEMO.CURATED.DIM_SUPPLIER s
+    LEFT JOIN BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC r
+      ON r.SUPPLIER_NAME = s.SUPPLIER_NAME AND r.STATUS = 'DELIVERED'
+    GROUP BY s.SUPPLIER_NAME, s.BRANDS, s.STD_LEAD_TIME_DAYS, s.SOURCING_TYPE, s.IS_3PL_VIABLE, s.PRIMARY_CARRIER, s.TRANSPORT_MODE, s.ESTIMATED_3PL_DAYS
+    ORDER BY LEAD_GAP DESC
+  `);
+
+  return rows.map(r => ({
+    supplier: r.SUPPLIER_NAME,
+    brands: r.BRANDS,
+    stdLeadTime: safeInt(r.STD_LEAD_TIME_DAYS),
+    avgActualLead: safeFloat(r.AVG_ACTUAL_LEAD),
+    gap: safeFloat(r.LEAD_GAP),
+    sourcingType: r.SOURCING_TYPE,
+    is3plViable: r.IS_3PL_VIABLE,
+    carrier: r.PRIMARY_CARRIER,
+    transportMode: r.TRANSPORT_MODE,
+    est3plDays: safeInt(r.ESTIMATED_3PL_DAYS),
+    totalPOs: safeInt(r.TOTAL_POS),
+    otPct: safeFloat(r.OT_PCT),
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OPERATIONS HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function handleOpsInbound(dc: string, period: string) {
+  const dcFilter = dc !== "all" ? `AND DC_STATE = '${escapeSql(dc)}'` : "";
+  const dateFilter = period === "today" ? "AND EXPECTED_DELIVERY_DATE = CURRENT_DATE()"
+    : "AND EXPECTED_DELIVERY_DATE BETWEEN CURRENT_DATE() AND DATEADD(DAY, 7, CURRENT_DATE())";
+
+  const [arrivals, performance, discrepancies] = await Promise.all([
+    querySnowflake(`
+      SELECT PO_NUMBER, SUPPLIER_NAME, BRAND_NAME, SKU_CLASS, DC_STATE, PALLETS, CARRIER,
+             EXPECTED_DELIVERY_DATE, ACTUAL_DELIVERY_DATE, STATUS,
+             DOCK_TO_CHECK_HOURS, CHECK_TO_PUTAWAY_HOURS
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE (STATUS IN ('IN_TRANSIT', 'ON_ORDER', 'OVERDUE') OR (STATUS = 'DELIVERED' AND ACTUAL_DELIVERY_DATE >= CURRENT_DATE() - 1))
+      ${dcFilter} ${dateFilter}
+      ORDER BY EXPECTED_DELIVERY_DATE, SUPPLIER_NAME
+    `),
+    querySnowflake(`
+      SELECT DC_STATE,
+             ROUND(AVG(DOCK_TO_CHECK_HOURS), 1) AS AVG_DOCK_CHECK,
+             ROUND(AVG(CHECK_TO_PUTAWAY_HOURS), 1) AS AVG_CHECK_PUTAWAY,
+             ROUND(SUM(CASE WHEN DOCK_TO_CHECK_HOURS + CHECK_TO_PUTAWAY_HOURS <= 8 THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(*), 0) * 100, 1) AS SAME_DAY_PCT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS = 'DELIVERED' AND ACTUAL_DELIVERY_DATE >= CURRENT_DATE() - 7 ${dcFilter}
+      GROUP BY DC_STATE
+    `),
+    querySnowflake(`
+      SELECT PO_NUMBER, SUPPLIER_NAME, BRAND_NAME, SKU_CLASS, DC_STATE,
+             DISCREPANCY_TYPE, DISCREPANCY_UNITS, ACTUAL_DELIVERY_DATE
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE HAS_DISCREPANCY = TRUE AND ACTUAL_DELIVERY_DATE >= CURRENT_DATE() - 7 ${dcFilter}
+      ORDER BY ACTUAL_DELIVERY_DATE DESC
+    `),
+  ]);
+
+  return {
+    arrivals: arrivals.map(r => ({ po: r.PO_NUMBER, supplier: r.SUPPLIER_NAME, brand: r.BRAND_NAME, sku: r.SKU_CLASS, dc: r.DC_STATE, pallets: safeInt(r.PALLETS), carrier: r.CARRIER, expectedDate: r.EXPECTED_DELIVERY_DATE, status: r.STATUS, dockToCheck: safeFloat(r.DOCK_TO_CHECK_HOURS), checkToPutaway: safeFloat(r.CHECK_TO_PUTAWAY_HOURS) })),
+    performance: performance.map(r => ({ dc: r.DC_STATE, avgDockCheck: safeFloat(r.AVG_DOCK_CHECK), avgCheckPutaway: safeFloat(r.AVG_CHECK_PUTAWAY), sameDayPct: safeFloat(r.SAME_DAY_PCT) })),
+    discrepancies: discrepancies.map(r => ({ po: r.PO_NUMBER, supplier: r.SUPPLIER_NAME, brand: r.BRAND_NAME, sku: r.SKU_CLASS, dc: r.DC_STATE, type: r.DISCREPANCY_TYPE, units: safeInt(r.DISCREPANCY_UNITS), date: r.ACTUAL_DELIVERY_DATE })),
+  };
+}
+
+async function handleOpsWorkforce(dc: string) {
+  const dcFilter = dc !== "all" ? `AND DC_STATE = '${escapeSql(dc)}'` : "";
+
+  const [today, trend] = await Promise.all([
+    querySnowflake(`
+      SELECT DC_STATE, SHIFT, SHIFT_START, SHIFT_END, STAFF_ROSTERED, STAFF_ACTUAL,
+             INBOUND_PALLETS_EXPECTED, OUTBOUND_ORDERS_EXPECTED, OUTBOUND_PALLETS_EXPECTED,
+             PALLETS_PER_PERSON_HOUR, STAFF_REQUIRED, STAFF_GAP, IS_UNDERSTAFFED, RISK_LEVEL
+      FROM BABY_MART_DEMO.ANALYTICS.DC_WORKFORCE
+      WHERE SHIFT_DATE = CURRENT_DATE() ${dcFilter}
+      ORDER BY DC_STATE, SHIFT
+    `),
+    querySnowflake(`
+      SELECT SHIFT_DATE, DC_STATE, 
+             ROUND(AVG(PALLETS_PER_PERSON_HOUR), 2) AS AVG_PRODUCTIVITY,
+             SUM(STAFF_GAP) AS TOTAL_GAP,
+             SUM(CASE WHEN IS_UNDERSTAFFED THEN 1 ELSE 0 END) AS UNDERSTAFFED_SHIFTS
+      FROM BABY_MART_DEMO.ANALYTICS.DC_WORKFORCE
+      WHERE SHIFT_DATE BETWEEN CURRENT_DATE() - 14 AND CURRENT_DATE() ${dcFilter}
+      GROUP BY SHIFT_DATE, DC_STATE
+      ORDER BY SHIFT_DATE
+    `),
+  ]);
+
+  return {
+    today: today.map(r => ({ dc: r.DC_STATE, shift: r.SHIFT, shiftStart: r.SHIFT_START, shiftEnd: r.SHIFT_END, staffRostered: safeInt(r.STAFF_ROSTERED), staffActual: safeInt(r.STAFF_ACTUAL), inboundPallets: safeInt(r.INBOUND_PALLETS_EXPECTED), outboundOrders: safeInt(r.OUTBOUND_ORDERS_EXPECTED), outboundPallets: safeFloat(r.OUTBOUND_PALLETS_EXPECTED), productivity: safeFloat(r.PALLETS_PER_PERSON_HOUR), staffRequired: safeInt(r.STAFF_REQUIRED), staffGap: safeInt(r.STAFF_GAP), isUnderstaffed: r.IS_UNDERSTAFFED, riskLevel: r.RISK_LEVEL })),
+    trend: trend.map(r => ({ date: r.SHIFT_DATE, dc: r.DC_STATE, avgProductivity: safeFloat(r.AVG_PRODUCTIVITY), totalGap: safeInt(r.TOTAL_GAP), understaffedShifts: safeInt(r.UNDERSTAFFED_SHIFTS) })),
+  };
+}
+
+async function handleOpsOutbound(dc: string, channel: string) {
+  const dcFilter = dc !== "all" ? `AND DC_STATE = '${escapeSql(dc)}'` : "";
+  const channelFilter = channel !== "all" ? `AND CHANNEL = '${escapeSql(channel)}'` : "";
+
+  const [kpis, byChannel, carrierPerf, issues] = await Promise.all([
+    querySnowflake(`
+      SELECT COUNT(*) AS TOTAL_ORDERS,
+             SUM(CASE WHEN STATUS = 'DELIVERED' OR STATUS = 'IN_TRANSIT' THEN 1 ELSE 0 END) AS DISPATCHED,
+             ROUND(AVG(ORDER_TO_DISPATCH_HOURS), 1) AS AVG_DISPATCH_HOURS,
+             ROUND(SUM(CASE WHEN ON_TIME_DISPATCH THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(ON_TIME_DISPATCH), 0) * 100, 1) AS ON_TIME_DISPATCH_PCT,
+             ROUND(AVG(PICK_ACCURACY_PCT), 1) AS AVG_PICK_ACCURACY
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_DC_STORE
+      WHERE ORDER_RECEIVED_TIMESTAMP::DATE >= CURRENT_DATE() - 1 ${dcFilter} ${channelFilter}
+    `),
+    querySnowflake(`
+      SELECT CHANNEL, COUNT(*) AS ORDERS,
+             ROUND(SUM(CASE WHEN ON_TIME_DISPATCH THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(ON_TIME_DISPATCH), 0) * 100, 1) AS ON_TIME_PCT,
+             ROUND(SUM(PALLETS), 1) AS TOTAL_PALLETS
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_DC_STORE
+      WHERE ORDER_RECEIVED_TIMESTAMP::DATE >= CURRENT_DATE() - 1 ${dcFilter}
+      GROUP BY CHANNEL
+    `),
+    querySnowflake(`
+      SELECT CARRIER, COUNT(*) AS SHIPMENTS,
+             ROUND(SUM(CASE WHEN ON_TIME_DELIVERY THEN 1 ELSE 0 END)::FLOAT / NULLIF(COUNT(ON_TIME_DELIVERY), 0) * 100, 1) AS ON_TIME_PCT,
+             ROUND(AVG(TRANSIT_DAYS_ACTUAL), 1) AS AVG_TRANSIT
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_DC_STORE
+      WHERE STATUS = 'DELIVERED' AND DELIVERY_TIMESTAMP >= CURRENT_DATE() - 7 ${dcFilter}
+      GROUP BY CARRIER ORDER BY ON_TIME_PCT DESC
+    `),
+    querySnowflake(`
+      SELECT COUNT(CASE WHEN IS_BACKORDER THEN 1 END) AS BACKORDERS,
+             COUNT(CASE WHEN IS_SPLIT_SHIPMENT THEN 1 END) AS SPLITS
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_DC_STORE
+      WHERE ORDER_RECEIVED_TIMESTAMP::DATE >= CURRENT_DATE() - 7 ${dcFilter}
+    `),
+  ]);
+
+  const k = kpis[0] || {};
+  const iss = issues[0] || {};
+  return {
+    kpis: { totalOrders: safeInt(k.TOTAL_ORDERS), dispatched: safeInt(k.DISPATCHED), avgDispatchHours: safeFloat(k.AVG_DISPATCH_HOURS), onTimeDispatchPct: safeFloat(k.ON_TIME_DISPATCH_PCT), avgPickAccuracy: safeFloat(k.AVG_PICK_ACCURACY) },
+    byChannel: byChannel.map(r => ({ channel: r.CHANNEL, orders: safeInt(r.ORDERS), onTimePct: safeFloat(r.ON_TIME_PCT), pallets: safeFloat(r.TOTAL_PALLETS) })),
+    carrierPerformance: carrierPerf.map(r => ({ carrier: r.CARRIER, shipments: safeInt(r.SHIPMENTS), onTimePct: safeFloat(r.ON_TIME_PCT), avgTransit: safeFloat(r.AVG_TRANSIT) })),
+    issues: { backorders: safeInt(iss.BACKORDERS), splitShipments: safeInt(iss.SPLITS) },
+  };
+}
+
+async function handleOpsCapacity() {
+  const rows = await querySnowflake(`
+    SELECT SHIFT_DATE, DC_STATE,
+           SUM(INBOUND_PALLETS_EXPECTED) AS INBOUND_PALLETS,
+           SUM(OUTBOUND_ORDERS_EXPECTED) AS OUTBOUND_ORDERS,
+           SUM(OUTBOUND_PALLETS_EXPECTED) AS OUTBOUND_PALLETS,
+           MAX(RISK_LEVEL) AS PEAK_RISK
+    FROM BABY_MART_DEMO.ANALYTICS.DC_WORKFORCE
+    WHERE SHIFT_DATE BETWEEN CURRENT_DATE() - 7 AND CURRENT_DATE() + 3
+    GROUP BY SHIFT_DATE, DC_STATE
+    ORDER BY SHIFT_DATE, DC_STATE
+  `);
+
+  return rows.map(r => ({
+    date: r.SHIFT_DATE,
+    dc: r.DC_STATE,
+    inboundPallets: safeInt(r.INBOUND_PALLETS),
+    outboundOrders: safeInt(r.OUTBOUND_ORDERS),
+    outboundPallets: safeFloat(r.OUTBOUND_PALLETS),
+    peakRisk: r.PEAK_RISK,
+  }));
+}
+
+async function handlePurchaseOrders() {
+  const rows = await querySnowflake(`
+    SELECT PO_NUMBER, ORDER_DATE, EXPECTED_DELIVERY_DATE, SUPPLIER_NAME, BRAND_NAME,
+           SKU_CLASS, DC_STATE, ORDERED_UNITS, CARRIER, PALLETS, STATUS,
+           DATEDIFF(DAY, CURRENT_DATE(), EXPECTED_DELIVERY_DATE) AS DAYS_UNTIL_DUE
+    FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+    WHERE STATUS IN ('ON_ORDER', 'IN_TRANSIT', 'OVERDUE')
+    ORDER BY CASE STATUS WHEN 'OVERDUE' THEN 1 WHEN 'IN_TRANSIT' THEN 2 ELSE 3 END,
+             EXPECTED_DELIVERY_DATE
+  `);
+  return rows.map(r => ({
+    po: r.PO_NUMBER,
+    orderDate: r.ORDER_DATE,
+    expectedDate: r.EXPECTED_DELIVERY_DATE,
+    supplier: r.SUPPLIER_NAME,
+    brand: r.BRAND_NAME,
+    sku: r.SKU_CLASS,
+    dc: r.DC_STATE,
+    orderedUnits: safeInt(r.ORDERED_UNITS),
+    carrier: r.CARRIER,
+    pallets: safeInt(r.PALLETS),
+    status: r.STATUS,
+    daysUntilDue: safeInt(r.DAYS_UNTIL_DUE),
+  }));
+}
+
+async function handleDcCommandCenter() {
+  // Get current stock levels + demand + supplier delivery ETAs
+  const [inventory, pendingDeliveries] = await Promise.all([
+    querySnowflake(`
+      SELECT i.BRAND_NAME, i.SKU_CLASS, i.CATEGORY, i.DC_STATE, i.CLOSING_STOCK, i.DEMAND_UNITS, i.REORDER_POINT,
+             s.SUPPLIER_NAME, s.STD_LEAD_TIME_DAYS
+      FROM BABY_MART_DEMO.ANALYTICS.SKU_INVENTORY_WEEKLY i
+      LEFT JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON CONTAINS(s.BRANDS, i.BRAND_NAME)
+      WHERE i.DC_STATE != 'NATIONAL' AND i.WEEK_LABEL = 'W-1'
+      ORDER BY i.CLOSING_STOCK / NULLIF(i.DEMAND_UNITS, 1)
+    `),
+    querySnowflake(`
+      SELECT BRAND_NAME, SKU_CLASS, DC_STATE, SUPPLIER_NAME, EXPECTED_DELIVERY_DATE, ORDERED_UNITS, STATUS
+      FROM BABY_MART_DEMO.ANALYTICS.FORECAST_REPLENISHMENT_SUPPLIER_DC
+      WHERE STATUS IN ('ON_ORDER', 'IN_TRANSIT', 'OVERDUE')
+      ORDER BY EXPECTED_DELIVERY_DATE
+    `),
+  ]);
+
+  const items = inventory.map(r => {
+    const stock = safeFloat(r.CLOSING_STOCK);
+    const demand = safeFloat(r.DEMAND_UNITS);
+    const woc = demand > 0 ? Math.round((stock / demand) * 10) / 10 : 99;
+    const nextDelivery = pendingDeliveries.find(d => d.BRAND_NAME === r.BRAND_NAME && d.SKU_CLASS === r.SKU_CLASS && d.DC_STATE === r.DC_STATE);
+
+    return {
+      brand: r.BRAND_NAME,
+      sku: r.SKU_CLASS,
+      category: r.CATEGORY,
+      dc: r.DC_STATE,
+      stock: Math.round(stock),
+      demandPerWeek: Math.round(demand),
+      woc,
+      reorderPoint: safeInt(r.REORDER_POINT),
+      supplier: r.SUPPLIER_NAME,
+      leadTime: safeInt(r.STD_LEAD_TIME_DAYS),
+      nextDeliveryDate: nextDelivery?.EXPECTED_DELIVERY_DATE || null,
+      nextDeliveryUnits: nextDelivery ? safeInt(nextDelivery.ORDERED_UNITS) : null,
+      nextDeliveryStatus: nextDelivery?.STATUS || null,
+      status: woc < 2 ? "CRITICAL" : woc < 3 ? "WARNING" : "OK",
+    };
+  });
+
+  const attention = items.filter(i => i.status !== "OK");
+
+  return {
+    attention,
+    allItems: items,
+    summary: {
+      totalSkus: items.length,
+      critical: items.filter(i => i.status === "CRITICAL").length,
+      warning: items.filter(i => i.status === "WARNING").length,
+      ok: items.filter(i => i.status === "OK").length,
+    },
+  };
 }

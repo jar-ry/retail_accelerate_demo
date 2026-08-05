@@ -15,6 +15,12 @@ interface DcStock {
   stock: number;
   reorderPoint: number;
   demandUnits: number;
+  woc?: number;
+  supplier?: string | null;
+  leadTime?: number | null;
+  nextDeliveryDate?: string | null;
+  nextDeliveryStatus?: string | null;
+  nextDeliveryUnits?: number | null;
 }
 
 interface StoreRow {
@@ -48,6 +54,7 @@ interface StoreForecast {
     predicted4wkLoss: number;
   };
   dcStocks: DcStockForecast[];
+  demandForecast?: { week: string; forecastUnits: number; actualUnits: number | null; isForecast: boolean }[];
 }
 
 const DC_COLORS: Record<string, string> = {
@@ -132,6 +139,12 @@ function DcReplenishmentContent() {
       return Math.round((agg.stock / weeklyDemand) * 10) / 10;
     };
 
+    // Attention items: WoC < 3
+    const attentionItems = filtered.filter(d => {
+      const demand = d.demandUnits > 0 ? d.demandUnits : d.reorderPoint / 4;
+      return demand > 0 && (d.stock / demand) < 3;
+    }).slice(0, 5);
+
     return (
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
@@ -141,6 +154,46 @@ function DcReplenishmentContent() {
           </div>
           <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md font-medium">All Brands</div>
         </div>
+
+        {/* Attention Banner */}
+        {attentionItems.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <TrendingDown className="w-4 h-4 text-red-600" />
+              <h3 className="text-sm font-semibold text-red-700">Attention Required ({attentionItems.length} items below 3 WoC)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-red-600/70">
+                  <th className="pb-1 font-medium">Brand / SKU</th><th className="pb-1 font-medium">DC</th>
+                  <th className="pb-1 font-medium">Stock</th><th className="pb-1 font-medium">WoC</th>
+                  <th className="pb-1 font-medium">Supplier</th><th className="pb-1 font-medium">Lead Time</th>
+                  <th className="pb-1 font-medium">Next Delivery</th>
+                </tr></thead>
+                <tbody>
+                  {attentionItems.map((d, i) => {
+                    const demand = d.demandUnits > 0 ? d.demandUnits : d.reorderPoint / 4;
+                    const woc = demand > 0 ? Math.round((d.stock / demand) * 10) / 10 : 99;
+                    return (
+                      <tr key={i} className="border-t border-red-100">
+                        <td className="py-1.5 font-medium text-slate-800">{d.brand} — {d.skuClass}</td>
+                        <td className="py-1.5 text-slate-600">{d.state}</td>
+                        <td className="py-1.5 text-slate-800">{d.stock}</td>
+                        <td className={`py-1.5 font-bold ${woc < 2 ? "text-red-700" : "text-amber-600"}`}>{woc}</td>
+                        <td className="py-1.5 text-slate-600">{d.supplier || "—"}</td>
+                        <td className="py-1.5 text-slate-600">{d.leadTime ? `${d.leadTime}d` : "—"}</td>
+                        <td className="py-1.5">{d.nextDeliveryDate
+                          ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${d.nextDeliveryStatus === "IN_TRANSIT" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{d.nextDeliveryStatus} — {new Date(d.nextDeliveryDate).toLocaleDateString()}</span>
+                          : <span className="text-red-500 font-medium">None scheduled</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-5 gap-3 mb-6">
           {states.map(([state, agg]) => {
@@ -187,11 +240,12 @@ function DcReplenishmentContent() {
                   <Link key={i} href={`/replenishment/dc?brand=${encodeURIComponent(d.brand)}&sku=${encodeURIComponent(d.skuClass)}`} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 text-xs hover:bg-slate-50">
                     <div>
                       <div className="font-medium text-blue-700">{d.brand} — {d.skuClass}</div>
-                      <div className="text-[10px] text-slate-400">{d.state} DC</div>
+                      <div className="text-[10px] text-slate-400">{d.state} DC{d.supplier ? ` · ${d.supplier}` : ""}{d.leadTime ? ` · ${d.leadTime}d lead` : ""}</div>
                     </div>
                     <div className="text-right">
                       <div className={`font-mono font-semibold ${healthy ? "text-emerald-600" : "text-red-600"}`}>{d.stock}</div>
                       <div className="text-[10px] text-slate-400">RP: {d.reorderPoint}</div>
+                      {d.nextDeliveryStatus && <div className="text-[9px] text-blue-500">{d.nextDeliveryStatus}</div>}
                     </div>
                   </Link>
                 );
@@ -270,6 +324,50 @@ function DcReplenishmentContent() {
               <div className="font-mono text-2xl font-bold text-red-700 mt-1">{fmt(storeForecast.summary.predicted4wkLoss)}</div>
             </div>
           </div>
+
+          {/* Demand Forecast Chart */}
+          {storeForecast.demandForecast && storeForecast.demandForecast.length > 0 && (() => {
+            const df = storeForecast.demandForecast!;
+            const weekLabels = df.map((_, i) => `W${i + 1}`);
+            return (
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mb-5">
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">Demand Forecast vs Actual — {filterBrand} / {filterSku}</h3>
+              <Plot
+                data={[
+                  {
+                    x: weekLabels.filter((_, i) => !df[i].isForecast),
+                    y: df.filter(d => !d.isForecast).map(d => d.actualUnits),
+                    name: "Actual Demand",
+                    type: "scatter" as const,
+                    mode: "lines+markers" as const,
+                    line: { color: "#10b981", width: 2.5 },
+                    marker: { size: 5 },
+                  },
+                  {
+                    x: weekLabels,
+                    y: df.map(d => d.forecastUnits),
+                    name: "Forecast",
+                    type: "scatter" as const,
+                    mode: "lines" as const,
+                    line: { color: "#2563eb", width: 2, dash: "dash" as const },
+                  },
+                ]}
+                layout={{
+                  height: 220,
+                  margin: { l: 55, r: 20, t: 10, b: 30 },
+                  showlegend: true,
+                  legend: { orientation: "h" as const, y: -0.2, font: { size: 10 } },
+                  yaxis: { title: { text: "Units / week", font: { size: 10 } }, rangemode: "tozero" as const },
+                  xaxis: { title: { text: "Week", font: { size: 10 } } },
+                  font: { family: "Inter, system-ui, sans-serif", size: 10 },
+                }}
+                config={{ displayModeBar: false, responsive: true }}
+                style={{ width: "100%" }}
+              />
+              <p className="text-[10px] text-slate-400 mt-2">Blue dashed = ML forecast. Green = actual sell-through. Future weeks are forecast only.</p>
+            </div>
+            );
+          })()}
 
           {/* DC stock drain chart + DC summary */}
           <div className="grid grid-cols-[2fr_1fr] gap-4 mb-5">

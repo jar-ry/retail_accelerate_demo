@@ -8,7 +8,8 @@ import { AudienceProvider } from "@/context/AudienceContext";
 import {
   LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck,
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
-  DollarSign, Sparkles,
+  DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
+  Scale, Clock,
 } from "lucide-react";
 
 const categories = [
@@ -148,15 +149,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               ) : persona === "supply" ? (
                 <>
                   <NavItem href="/replenishment" icon={LayoutDashboard} label="Dashboard" color="emerald" />
-                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Supply Chain Views</div>
+                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Supply Chain</div>
                   <NavItem href="/replenishment/demand" icon={Store} label="Customer Demand" color="emerald" />
                   <NavItem href="/replenishment/dc" icon={Warehouse} label="DC Replenishment" color="emerald" />
                   <NavItem href="/replenishment/difot" icon={Truck} label="Supplier DIFOT" color="emerald" />
+                  <NavItem href="/replenishment/reorder" icon={ClipboardList} label="Purchase Orders" color="emerald" />
+                  <NavItem href="/replenishment/alerts" icon={AlertTriangle} label="Alerts" color="emerald" />
+                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Planning & Demand</div>
+                  <NavItem href="/replenishment/planning/demand" icon={TrendingUp} label="Demand Forecast" color="emerald" />
+                  <NavItem href="/replenishment/planning/difot" icon={Scale} label="DIFOT Breakdown" color="emerald" />
+                  <NavItem href="/replenishment/planning/overtrading" icon={BarChart3} label="Overtrading" color="emerald" />
+                  <NavItem href="/replenishment/planning/leadtime" icon={Clock} label="Lead Time & 3PL" color="emerald" />
                   <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Operations</div>
-                  <NavItem href="/replenishment/reorder" icon={ClipboardList} label="Reorder Queue" color="emerald" />
-                  <NavItem href="/replenishment/alerts" icon={AlertTriangle} label="Stock Alerts" color="emerald" />
-                  <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">AI Tools</div>
-                  <NavItem href="/agent" icon={Bot} label="Supply Agent" color="emerald" />
+                  <NavItem href="/replenishment/ops/inbound" icon={PackageCheck} label="Inbound" color="emerald" />
+                  <NavItem href="/replenishment/ops/workforce" icon={UserCheck} label="Workforce" color="emerald" />
+                  <NavItem href="/replenishment/ops/outbound" icon={ArrowRightFromLine} label="Outbound" color="emerald" />
+                  <NavItem href="/replenishment/ops/capacity" icon={BarChart3} label="DC Capacity" color="emerald" />
                 </>
               ) : (
                 <>

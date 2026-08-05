@@ -12,6 +12,9 @@ interface BrandDifot {
   category: string;
   avgDifot: number;
   latestDifot: number;
+  diPct?: number;
+  otPct?: number;
+  supplier?: string;
   totalOrders: number;
   totalOnTime: number;
   weeksBelowTarget: number;
@@ -101,9 +104,9 @@ export default function SupplierDifotPage() {
         <Plot
           data={chartData}
           layout={{
-            height: Math.max(280, brands.length * 32),
-            margin: { l: 120, r: 60, t: 10, b: 30 },
-            xaxis: { range: [80, 100], title: { text: "DIFOT %", font: { size: 10 } } },
+            height: Math.max(400, brands.length * 38),
+            margin: { l: 140, r: 60, t: 10, b: 30 },
+            xaxis: { range: [Math.max(0, Math.min(...brands.map(b => b.avgDifot)) - 10), 100], title: { text: "DIFOT %", font: { size: 10 } } },
             yaxis: { autorange: "reversed" as const },
             shapes: [{ type: "line" as const, x0: 96, x1: 96, y0: -0.5, y1: brands.length - 0.5, line: { color: "#dc2626", width: 2, dash: "dash" as const } }],
             annotations: [{ x: 96, y: -0.8, text: "Target 96%", showarrow: false, font: { size: 9, color: "#dc2626" } }],
@@ -119,11 +122,11 @@ export default function SupplierDifotPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200">
-              <th className="text-left py-2 text-xs font-semibold text-slate-500">Brand / Supplier</th>
-              <th className="text-left py-2 text-xs font-semibold text-slate-500">Category</th>
-              <th className="text-right py-2 text-xs font-semibold text-slate-500">Avg DIFOT</th>
-              <th className="text-right py-2 text-xs font-semibold text-slate-500">Latest</th>
-              <th className="text-center py-2 text-xs font-semibold text-slate-500">Wks Below Target</th>
+              <th className="text-left py-2 text-xs font-semibold text-slate-500">Brand</th>
+              <th className="text-left py-2 text-xs font-semibold text-slate-500">Distributor</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">DIFOT</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">DI%</th>
+              <th className="text-right py-2 text-xs font-semibold text-slate-500">OT%</th>
               <th className="text-right py-2 text-xs font-semibold text-slate-500">Orders</th>
               <th className="text-center py-2 text-xs font-semibold text-slate-500">Status</th>
             </tr>
@@ -136,17 +139,12 @@ export default function SupplierDifotPage() {
                 <tr key={b.brand} className="border-b border-slate-50 hover:bg-slate-50">
                   <td className="py-2.5">
                     <Link href={`/replenishment/difot/${encodeURIComponent(b.brand)}`} className="font-medium text-blue-700 hover:underline text-sm">{b.brand}</Link>
+                    <div className="text-[10px] text-slate-400">{b.category}</div>
                   </td>
-                  <td className="py-2.5 text-xs text-slate-500">{b.category}</td>
+                  <td className="py-2.5 text-xs text-slate-600">{b.supplier || "—"}</td>
                   <td className={`py-2.5 text-right font-mono font-semibold ${getDifotColor(b.avgDifot)}`}>{b.avgDifot}%</td>
-                  <td className={`py-2.5 text-right font-mono ${getDifotColor(b.latestDifot)}`}>{b.latestDifot}%</td>
-                  <td className="py-2.5 text-center">
-                    {b.weeksBelowTarget > 0 ? (
-                      <span className="inline-flex items-center gap-0.5 text-xs text-red-600 font-medium"><TrendingDown className="w-3 h-3" />{b.weeksBelowTarget}</span>
-                    ) : (
-                      <span className="text-xs text-emerald-600"><TrendingUp className="w-3 h-3 inline" /></span>
-                    )}
-                  </td>
+                  <td className={`py-2.5 text-right font-mono text-xs ${getDifotColor(b.diPct || 0)}`}>{b.diPct || "—"}%</td>
+                  <td className={`py-2.5 text-right font-mono text-xs ${getDifotColor(b.otPct || 0)}`}>{b.otPct || "—"}%</td>
                   <td className="py-2.5 text-right font-mono text-xs text-slate-600">{b.totalOrders.toLocaleString()}</td>
                   <td className="py-2.5 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColor}`}>{status}</span>

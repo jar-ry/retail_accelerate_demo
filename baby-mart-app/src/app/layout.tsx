@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Baby Mart - Supplier Collaboration Platform",
-  description: "Retail collaboration platform for supplier-retailer data sharing",
+  title: "Baby Mart Retail Platform",
+  description: "Category intelligence, supply chain operations, and campaign management for Baby Mart",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

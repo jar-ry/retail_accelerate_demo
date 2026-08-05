@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Store, Loader2, TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
+import { Store, Loader2, TrendingUp, TrendingDown, Minus, ArrowRight, Globe } from "lucide-react";
 import dynamic from "next/dynamic";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
@@ -19,21 +19,32 @@ const BRAND_COLORS: Record<string, string> = {
 
 export default function CustomerDemandPage() {
   const [trends, setTrends] = useState<TrendPoint[]>([]);
+  const [pyData, setPyData] = useState<TrendPoint[] | null>(null);
+  const [onlineShare, setOnlineShare] = useState(0);
   const [acceleration, setAcceleration] = useState<Acceleration[]>([]);
   const [stateData, setStateData] = useState<StateDemand[]>([]);
   const [loading, setLoading] = useState(true);
+  const [channel, setChannel] = useState<"all" | "instore" | "online">("all");
+  const [showPY, setShowPY] = useState(false);
 
   useEffect(() => {
+    setLoading(true);
     Promise.all([
-      fetch("/api/supply/demand/trends").then((r) => r.json()),
+      fetch(`/api/supply/demand/trends?channel=${channel}&includePY=${showPY}`).then((r) => r.json()),
       fetch("/api/supply/demand/acceleration").then((r) => r.json()),
       fetch("/api/supply/demand/by-state").then((r) => r.json()),
-    ]).then(([t, a, s]) => {
-      if (Array.isArray(t)) setTrends(t);
+    ]).then(([trendResp, a, s]) => {
+      if (trendResp.trends && Array.isArray(trendResp.trends)) {
+        setTrends(trendResp.trends);
+        setPyData(trendResp.pyData || null);
+        setOnlineShare(trendResp.onlineShare || 0);
+      } else if (Array.isArray(trendResp)) {
+        setTrends(trendResp);
+      }
       if (Array.isArray(a)) setAcceleration(a);
       if (Array.isArray(s)) setStateData(s);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [channel, showPY]);
 
   if (loading) {
     return (
@@ -51,7 +62,7 @@ export default function CustomerDemandPage() {
   const declining = acceleration.filter((a) => a.signal === "declining").length;
   const topGrower = acceleration.length > 0 ? acceleration[0] : null;
 
-  const trendTraces = topBrands.map((brand) => {
+  const trendTraces: any[] = topBrands.map((brand) => {
     const pts = trends.filter((t) => t.brand === brand);
     return {
       x: pts.map((p) => `W${p.week}`),
@@ -62,6 +73,24 @@ export default function CustomerDemandPage() {
       line: { color: BRAND_COLORS[brand] || "#64748b", width: 2 },
     };
   });
+
+  // PY overlay traces
+  if (showPY && pyData) {
+    const pyBrands = [...new Set(pyData.map(p => p.brand))].slice(0, 5);
+    pyBrands.forEach(brand => {
+      const pts = pyData.filter(t => t.brand === brand);
+      trendTraces.push({
+        x: pts.map(p => `W${p.week}`),
+        y: pts.map(p => p.units),
+        name: `${brand} (PY)`,
+        type: "scatter" as const,
+        mode: "lines" as const,
+        line: { color: "#94a3b8", width: 1, dash: "dash" },
+        opacity: 0.5,
+        showlegend: false,
+      });
+    });
+  }
 
   const stateChart = [{
     y: stateData.map((d) => d.state),
@@ -81,10 +110,24 @@ export default function CustomerDemandPage() {
           <Store className="w-5 h-5 text-emerald-700" />
           <h1 className="text-xl font-bold text-slate-900">Customer Demand</h1>
         </div>
-        <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md font-medium">YTD 2026 (Weeks 1-18)</div>
+        <div className="flex items-center gap-3">
+          {/* Channel Toggle */}
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            {([["all", "All"], ["instore", "In-Store"], ["online", "Online"]] as const).map(([val, label]) => (
+              <button key={val} onClick={() => setChannel(val)} className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${channel === val ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* PY Toggle */}
+          <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+            <input type="checkbox" checked={showPY} onChange={(e) => setShowPY(e.target.checked)} className="rounded border-slate-300" />
+            PY Overlay
+          </label>
+        </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
           <div className="text-[10px] font-medium text-slate-500 uppercase">Total Units (YTD)</div>
           <div className="mt-1 font-mono text-2xl font-bold text-slate-900">{totalUnits.toLocaleString()}</div>
@@ -105,11 +148,20 @@ export default function CustomerDemandPage() {
           <div className="mt-1 font-mono text-lg font-bold text-emerald-700">{topGrower ? `+${topGrower.changePct}%` : "\u2014"}</div>
           <div className="mt-1 text-xs text-slate-500 truncate">{topGrower ? `${topGrower.brand} ${topGrower.skuClass}` : ""}</div>
         </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+          <div className="text-[10px] font-medium text-slate-500 uppercase flex items-center gap-1"><Globe className="w-3 h-3" /> Online Share</div>
+          <div className="mt-1 font-mono text-2xl font-bold text-blue-600">{onlineShare}%</div>
+          <div className="mt-1 text-xs text-blue-500">of L4W demand</div>
+        </div>
       </div>
 
       <div className="grid grid-cols-[2fr_1fr] gap-4 mb-6">
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-2">Weekly Demand Trend by Brand</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-800">Weekly Demand Trend by Brand</h3>
+            {channel !== "all" && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium">{channel === "instore" ? "In-Store Only" : "Online Only"}</span>}
+            {showPY && <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">+ PY (dashed)</span>}
+          </div>
           <Plot
             data={trendTraces}
             layout={{

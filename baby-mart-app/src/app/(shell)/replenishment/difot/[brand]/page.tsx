@@ -8,7 +8,7 @@ import { ChevronRight, Loader2, ArrowRight } from "lucide-react";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
-interface DifotWeek { week: number; difotPct: number; ordersTotal: number; ordersOnTime: number; }
+interface DifotWeek { week: number; difotPct: number; diPct?: number; otPct?: number; ordersTotal: number; ordersOnTime: number; }
 interface SkuDifot { skuClass: string; avgDifot: number; totalOrders: number; totalOnTime: number; weeksBelowTarget: number; }
 interface SkuTrend { skuClass: string; week: number; difotPct: number; ordersTotal: number; ordersOnTime: number; }
 
@@ -86,11 +86,29 @@ export default function SupplierDifotBrandPage() {
   const brandTrace = {
     x: data.map((d) => `W${d.week}`),
     y: data.map((d) => d.difotPct),
-    name: "Brand Avg",
+    name: "DIFOT (combined)",
     type: "scatter" as const,
     mode: "lines" as const,
-    line: { color: "#94a3b8", width: 1.5, dash: "dash" as const },
-    opacity: 0.6,
+    line: { color: "#2563eb", width: 2.5 },
+  };
+
+  // DI% and OT% component traces
+  const diTrace = {
+    x: data.map((d) => `W${d.week}`),
+    y: data.map((d) => d.diPct ?? null),
+    name: "DI% (In-Full)",
+    type: "scatter" as const,
+    mode: "lines" as const,
+    line: { color: "#10b981", width: 1.5, dash: "dash" as const },
+  };
+
+  const otTrace = {
+    x: data.map((d) => `W${d.week}`),
+    y: data.map((d) => d.otPct ?? null),
+    name: "OT% (On-Time)",
+    type: "scatter" as const,
+    mode: "lines" as const,
+    line: { color: "#8b5cf6", width: 1.5, dash: "dash" as const },
   };
 
   return (
@@ -201,11 +219,11 @@ export default function SupplierDifotBrandPage() {
           )}
         </div>
         <Plot
-          data={[brandTrace, ...skuTraces]}
+          data={[brandTrace, diTrace, otTrace, ...skuTraces]}
           layout={{
             height: 320, margin: { l: 50, r: 50, t: 10, b: 40 },
             legend: { orientation: "h" as const, y: -0.2, x: 0.5, xanchor: "center" as const, font: { size: 9 } },
-            yaxis: { title: { text: "DIFOT %", font: { size: 10 } }, range: [82, 100] },
+            yaxis: { title: { text: "DIFOT %", font: { size: 10 } }, range: [60, 100] },
             xaxis: { title: { text: "Week", font: { size: 10 } } },
             shapes: [{ type: "line" as const, x0: 0, x1: 1, xref: "paper" as const, y0: 96, y1: 96, yref: "y" as const, line: { color: "#dc2626", width: 1.5, dash: "dash" as const } }],
             annotations: [{ x: 0.02, y: 96, xref: "paper" as const, text: "Target 96%", showarrow: false, font: { size: 9, color: "#dc2626" }, yshift: 8 }],

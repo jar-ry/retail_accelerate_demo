@@ -1,8 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, Package, Truck, CheckCircle2, XCircle, Clock, Loader2, RefreshCw } from "lucide-react";
 import { useSupplyProfiles, useRefreshSupplyData } from "@/hooks/useSupplyData";
+
+interface SupplierPerf { supplier: string; brands: string; stdLeadTime: number; avgActualLead: number; gap: number; sourcingType: string; is3plViable: boolean; est3plDays: number; totalPOs: number; otPct: number; }
 
 function getStockStatus(woc: number): { label: string; color: string; bg: string } {
   if (woc < 4) return { label: "Critical", color: "text-red-700", bg: "bg-red-100" };
@@ -21,6 +24,11 @@ function getWocColor(woc: number): string {
 export default function ReplenishmentPage() {
   const { data: profiles = [], isLoading: loading, isFetching } = useSupplyProfiles();
   const refresh = useRefreshSupplyData();
+  const [suppliers, setSuppliers] = useState<SupplierPerf[]>([]);
+
+  useEffect(() => {
+    fetch("/api/supply/planning/leadtime").then(r => r.json()).then(d => { if (Array.isArray(d)) setSuppliers(d); }).catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -181,6 +189,47 @@ export default function ReplenishmentPage() {
           </div>
         </div>
       </div>
+
+      {/* Supplier Performance */}
+      {suppliers.length > 0 && (
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Truck className="w-4 h-4 text-emerald-700" />
+            <h3 className="text-sm font-semibold text-slate-800">Distributor Performance</h3>
+            <Link href="/replenishment/planning/leadtime" className="ml-auto text-[10px] text-emerald-600 hover:underline font-medium">View Full Analysis →</Link>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200">
+                <th className="text-left py-2 text-xs font-semibold text-slate-500">Distributor</th>
+                <th className="text-left py-2 text-xs font-semibold text-slate-500">Brands</th>
+                <th className="text-center py-2 text-xs font-semibold text-slate-500">Lead Time</th>
+                <th className="text-center py-2 text-xs font-semibold text-slate-500">Actual</th>
+                <th className="text-center py-2 text-xs font-semibold text-slate-500">Gap</th>
+                <th className="text-center py-2 text-xs font-semibold text-slate-500">OT%</th>
+                <th className="text-center py-2 text-xs font-semibold text-slate-500">Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suppliers.slice(0, 6).map((s) => {
+                const risk = s.gap > 3 ? "HIGH" : s.gap > 1 ? "MED" : "LOW";
+                const riskColor = risk === "HIGH" ? "text-red-700 bg-red-100" : risk === "MED" ? "text-amber-700 bg-amber-100" : "text-emerald-700 bg-emerald-100";
+                return (
+                  <tr key={s.supplier} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="py-2 font-medium text-slate-800 text-xs">{s.supplier}</td>
+                    <td className="py-2 text-[10px] text-slate-500 max-w-[180px] truncate">{s.brands}</td>
+                    <td className="py-2 text-center text-xs text-slate-600">{s.stdLeadTime}d</td>
+                    <td className="py-2 text-center text-xs font-medium text-slate-800">{s.avgActualLead}d</td>
+                    <td className={`py-2 text-center text-xs font-semibold ${s.gap > 2 ? "text-red-600" : s.gap > 0 ? "text-amber-600" : "text-emerald-600"}`}>+{s.gap}d</td>
+                    <td className={`py-2 text-center text-xs ${s.otPct >= 90 ? "text-emerald-600" : s.otPct >= 80 ? "text-amber-600" : "text-red-600"}`}>{s.otPct}%</td>
+                    <td className="py-2 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${riskColor}`}>{risk}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
