@@ -13,24 +13,34 @@ export async function GET(
   const { path } = await params;
   const segment = path[0];
 
-  switch (segment) {
-    case "suppliers":
-      return handleGetSuppliers();
-    case "profitability":
-      return handleGetProfitability(request);
-    case "benchmarking":
-      return handleGetBenchmarking(request);
-    case "scorecard":
-      const supplierName = path.slice(1).join("/");
-      if (!supplierName) {
-        return NextResponse.json(
-          { error: "Supplier name is required" },
-          { status: 400 }
-        );
+  // Without this, a failing query returns Next's HTML 500 page, which the
+  // client's r.json() then chokes on -- surfacing as an endless spinner rather
+  // than the actual Snowflake error.
+  try {
+    switch (segment) {
+      case "suppliers":
+        return await handleGetSuppliers();
+      case "profitability":
+        return await handleGetProfitability(request);
+      case "benchmarking":
+        return await handleGetBenchmarking(request);
+      case "scorecard": {
+        const supplierName = path.slice(1).join("/");
+        if (!supplierName) {
+          return NextResponse.json(
+            { error: "Supplier name is required" },
+            { status: 400 }
+          );
+        }
+        return await handleGetScorecard(decodeURIComponent(supplierName));
       }
-      return handleGetScorecard(decodeURIComponent(supplierName));
-    default:
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      default:
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`Vendor API /${path.join("/")} failed: ${message}`);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -139,21 +149,12 @@ async function handleGetProfitability(request: NextRequest) {
   const netSales = Number(w["NET_SALES"] || 0);
   const cogs = Number(w["COGS"] || 0);
   const margin = Number(w["GROSS_MARGIN"] || 0);
-  // Estimate rebates as ~2% of net sales for demo
+  // NOTE: rebates are a hardcoded 2% estimate, not real data, so the
+  // netMarginPct KPI below is synthetic. Kept only to preserve that KPI.
   const rebates = Math.round(netSales * 0.02);
   const netMargin = margin - rebates;
 
   return NextResponse.json({
-    waterfall: {
-      grossSales: Math.round(gross),
-      discounts: Math.round(discounts),
-      promoAllowances: Math.round(promo),
-      netSales: Math.round(netSales),
-      cogs: Math.round(cogs),
-      grossMargin: Math.round(margin),
-      rebates: Math.round(rebates),
-      netMargin: Math.round(netMargin),
-    },
     kpis: {
       netRevenue: Math.round(netSales),
       grossMarginPct:

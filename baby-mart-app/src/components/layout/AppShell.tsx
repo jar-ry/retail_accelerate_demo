@@ -145,6 +145,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/agent" icon={Bot} label="Category Agent" color="blue" />
                   <div className="px-4 pt-4 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Vendor Economics</div>
                   <NavItem href="/vendor/profitability" icon={DollarSign} label="Vendor Profitability" color="blue" />
+                  <NavItem href="/vendor/scorecard" icon={Scale} label="Vendor Scorecard" color="blue" />
+                  <NavItem href="/vendor/benchmarking" icon={BarChart3} label="Vendor Benchmarking" color="blue" />
                 </>
               ) : persona === "supply" ? (
                 <>

@@ -6,10 +6,9 @@ import dynamic from "next/dynamic";
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 interface Supplier { key: number; name: string; }
-interface Waterfall { grossSales: number; discounts: number; promoAllowances: number; netSales: number; cogs: number; grossMargin: number; rebates: number; netMargin: number; }
 interface SkuRow { product: string; category: string; class: string; grossSales: number; discounts: number; netSales: number; cogs: number; margin: number; marginPct: number; units: number; }
 interface TrendRow { month: string; revenue: number; margin: number; marginPct: number; }
-interface ProfitData { waterfall: Waterfall; kpis: { netRevenue: number; grossMarginPct: number; netMarginPct: number; promoSpendPct: number; discountPct: number; }; skus: SkuRow[]; trend: TrendRow[]; }
+interface ProfitData { kpis: { netRevenue: number; grossMarginPct: number; netMarginPct: number; promoSpendPct: number; discountPct: number; }; skus: SkuRow[]; trend: TrendRow[]; }
 
 function fmt(n: number) { if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`; if (n >= 1000) return `$${(n / 1000).toFixed(0)}K`; return `$${n.toFixed(0)}`; }
 
@@ -18,36 +17,33 @@ export default function VendorProfitabilityPage() {
   const [selected, setSelected] = useState("");
   const [data, setData] = useState<ProfitData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/vendor/suppliers").then((r) => r.json()).then((d) => { if (Array.isArray(d)) { setSuppliers(d); if (d.length > 0) setSelected(d[0].name); } }).catch(() => {});
+    fetch("/api/vendor/suppliers").then((r) => r.json()).then((d) => { if (Array.isArray(d)) { setSuppliers(d); if (d.length > 0) setSelected(d[0].name); } else if (d?.error) { setError(d.error); } }).catch((e) => setError(String(e)));
   }, []);
 
   useEffect(() => {
     if (!selected) return;
     setLoading(true);
-    fetch(`/api/vendor/profitability?supplier=${encodeURIComponent(selected)}`).then((r) => r.json()).then((d) => setData(d)).catch(() => {}).finally(() => setLoading(false));
+    setError(null);
+    fetch(`/api/vendor/profitability?supplier=${encodeURIComponent(selected)}`)
+      .then((r) => r.json())
+      .then((d) => { if (d?.error) { setError(d.error); setData(null); } else { setData(d); } })
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, [selected]);
 
-  if (!data && !loading) return <div className="p-6"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
+  if (error) return (
+    <div className="p-6">
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <p className="text-sm font-semibold text-red-800">Could not load vendor profitability</p>
+        <p className="mt-1 text-xs text-red-700 font-mono break-all">{error}</p>
+      </div>
+    </div>
+  );
 
-  const w = data?.waterfall;
-  const grossPct = (n: number) => w ? `${Math.round(n / w.grossSales * 100)}%` : "";
-  const waterfallTrace = w ? {
-    type: "waterfall" as const,
-    orientation: "v" as const,
-    x: ["Gross Sales", "Less: Discounts", "Less: Promo", "= Net Sales", "Less: COGS", "= Gross Margin", "Less: Rebates", "= Net Margin"],
-    y: [w.grossSales, -w.discounts, -w.promoAllowances, 0, -w.cogs, 0, -w.rebates, 0],
-    measure: ["absolute", "relative", "relative", "total", "relative", "total", "relative", "total"] as string[],
-    connector: { line: { color: "#cbd5e1", width: 1 } },
-    decreasing: { marker: { color: "#ef4444" } },
-    increasing: { marker: { color: "#10b981" } },
-    totals: { marker: { color: "#2563eb" } },
-    textposition: "inside" as const,
-    text: ["100%", grossPct(w.discounts), grossPct(w.promoAllowances), `${Math.round(w.netSales / w.grossSales * 100)}%`, `${Math.round(w.cogs / w.grossSales * 100)}%`, `${Math.round(w.grossMargin / w.grossSales * 100)}%`, grossPct(w.rebates), `${Math.round(w.netMargin / w.grossSales * 100)}%`],
-    textfont: { size: 11, color: "#ffffff" },
-    insidetextanchor: "middle" as const,
-  } : null;
+  if (!data && !loading) return <div className="p-6"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>;
 
   return (
     <div className="p-6">
@@ -72,12 +68,8 @@ export default function VendorProfitabilityPage() {
             <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm text-center"><div className="text-[10px] font-semibold text-slate-400 uppercase">Discount Rate</div><div className="font-mono text-xl font-bold text-red-600 mt-1">{data.kpis.discountPct}%</div></div>
           </div>
 
-          {/* Waterfall + Trend */}
-          <div className="grid grid-cols-[3fr_2fr] gap-4 mb-5">
-            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-800 mb-2">Gross-to-Net Margin Waterfall</h3>
-              {waterfallTrace && <Plot data={[waterfallTrace]} layout={{ height: 320, margin: { l: 60, r: 20, t: 30, b: 80 }, font: { family: "Inter, system-ui", size: 10 }, showlegend: false, yaxis: { title: { text: "AUD", font: { size: 10 } } } }} config={{ displayModeBar: false, responsive: true }} style={{ width: "100%" }} />}
-            </div>
+          {/* Margin trend */}
+          <div className="mb-5">
             <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-800 mb-2">Margin % Trend</h3>
               <Plot data={[{ x: data.trend.map((t) => t.month), y: data.trend.map((t) => t.marginPct), type: "scatter" as const, mode: "lines+markers" as const, line: { color: "#2563eb", width: 2 }, marker: { size: 5 } }]} layout={{ height: 250, margin: { l: 40, r: 10, t: 10, b: 30 }, font: { family: "Inter", size: 10 }, yaxis: { title: { text: "Margin %", font: { size: 10 } } } }} config={{ displayModeBar: false, responsive: true }} style={{ width: "100%" }} />

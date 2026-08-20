@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import date
 import os
 import snowflake.connector
+
+from _conn import connect
 from snowflake.connector.pandas_tools import write_pandas
 
 CONNECTION_NAME = os.getenv("SNOWFLAKE_CONNECTION_NAME") or "JCHEN_AWS1"
@@ -49,11 +51,8 @@ BRAND_SIZE_WEIGHTS = {
 
 if __name__ == "__main__":
     print("Connecting to Snowflake to read product catalog...")
-    conn = snowflake.connector.connect(connection_name=CONNECTION_NAME)
+    conn = connect()
     cur = conn.cursor()
-    cur.execute("USE DATABASE BABY_MART_DEMO")
-    cur.execute("USE SCHEMA CURATED")
-    cur.execute("USE WAREHOUSE DEMO_LOAD_WH")
 
     products_df = pd.read_sql("SELECT product_key, brand_key, unit_retail, unit_cost, category FROM DIM_PRODUCT", conn)
     products_df.columns = [c.lower() for c in products_df.columns]

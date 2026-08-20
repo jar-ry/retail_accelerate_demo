@@ -14,5 +14,20 @@ artifacts:
   - src: "public/**"
     dest: "public"
 profile:
-  label: Baby Mart Supplier Platform
-  description: Retail collaboration platform for supplier-retailer data sharing
+  label: Baby Mart Retail Platform
+  description: Category intelligence, supply chain operations, and campaign management for Baby Mart
+# No environment_variables needed for the canonical demo account: the committed
+# defaults in src/lib/snowflake.ts already target BABY_MART_DEMO / DEMO_ANALYTICS_WH.
+#
+# For Snowhouse, uncomment and deploy with the matching snowflake.yml values:
+# environment_variables:
+#   - name: BABY_MART_DATABASE
+#     value: TEMP
+#   - name: BABY_MART_SCHEMA_CURATED
+#     value: JARCHEN_CURATED
+#   - name: BABY_MART_SCHEMA_ANALYTICS
+#     value: JARCHEN_ANALYTICS
+#   - name: BABY_MART_SCHEMA_AI
+#     value: JARCHEN_AI
+#   - name: SNOWFLAKE_WAREHOUSE
+#     value: MNEGLAY_XS

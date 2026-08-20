@@ -22,3 +22,7 @@ DEMO_SCRIPT.md
 
 # Snowflake logs
 snowflake.log
+
+# TypeScript incremental build cache
+baby-mart-app/tsconfig.tsbuildinfo
+*.tsbuildinfo

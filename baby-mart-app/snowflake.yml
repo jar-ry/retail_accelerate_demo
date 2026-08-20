@@ -1,5 +1,15 @@
 definition_version: "2"
 
+# Deploy target: canonical demo account (SFSEAPAC-JCHEN_AWS1).
+#
+# To deploy to Snowhouse (SFCOGSOPS-SNOWHOUSE_AWS_US_WEST_2) instead, set:
+#   identifier:           TEMP.JARCHEN_APP   (Snowsight's Apps list does not
+#                                             index personal databases)
+#   query_warehouse:      MNEGLAY_XS
+#   build/service pool:   SNOW_APPS_DEFAULT_COMPUTE_POOL
+#   code_stage:           TEMP.JARCHEN_APP.BABY_MART_APP_STAGE
+# and add the environment_variables block shown in app.yml.
+
 entities:
   BABY_MART_APP:
     type: snowflake-app

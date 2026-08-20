@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { ArrowLeft, TrendingUp, TrendingDown, Sparkles, Package } from "lucide-react";
 import { brandData } from "@/data/brandConfig";
 import PeerComparison from "@/components/charts/PeerComparison";
-
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 export default function BrandDetailPage() {
   const params = useParams<{ name: string }>();
@@ -169,52 +166,6 @@ export default function BrandDetailPage() {
       </div>
       )}
 
-      {/* Vendor Profitability Waterfall */}
-      <VendorWaterfall brand={brand} />
-    </div>
-  );
-}
-
-function VendorWaterfall({ brand }: { brand: string }) {
-  const [waterfall, setWaterfall] = useState<any>(null);
-
-  useEffect(() => {
-    fetch(`/api/vendor/profitability?supplier=${encodeURIComponent(brand)}`)
-      .then((r) => r.json())
-      .then((d) => d.waterfall && setWaterfall(d.waterfall))
-      .catch(() => {});
-  }, [brand]);
-
-  if (!waterfall) return null;
-
-  const w = waterfall;
-  const grossPct = (n: number) => `${Math.round(n / w.grossSales * 100)}%`;
-
-  const trace = {
-    type: "waterfall" as const,
-    orientation: "v" as const,
-    x: ["Gross Sales", "Discounts", "Promo", "= Net Sales", "COGS", "= Gross Margin", "Rebates", "= Net Margin"],
-    y: [w.grossSales, -w.discounts, -w.promoAllowances, 0, -w.cogs, 0, -w.rebates, 0],
-    measure: ["absolute", "relative", "relative", "total", "relative", "total", "relative", "total"] as string[],
-    connector: { line: { color: "#cbd5e1", width: 1 } },
-    decreasing: { marker: { color: "#ef4444" } },
-    increasing: { marker: { color: "#10b981" } },
-    totals: { marker: { color: "#2563eb" } },
-    textposition: "inside" as const,
-    text: ["100%", grossPct(w.discounts), grossPct(w.promoAllowances), `${Math.round(w.netSales / w.grossSales * 100)}%`, `${Math.round(w.cogs / w.grossSales * 100)}%`, `${Math.round(w.grossMargin / w.grossSales * 100)}%`, grossPct(w.rebates), `${Math.round(w.netMargin / w.grossSales * 100)}%`],
-    textfont: { size: 11, color: "#ffffff" },
-    insidetextanchor: "middle" as const,
-  };
-
-  return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mt-6">
-      <h3 className="text-sm font-semibold text-slate-800 mb-2">Gross-to-Net Margin Waterfall</h3>
-      <Plot
-        data={[trace]}
-        layout={{ height: 300, margin: { l: 50, r: 20, t: 20, b: 70 }, font: { family: "Inter, system-ui", size: 10 }, showlegend: false, yaxis: { title: { text: "AUD", font: { size: 10 } } } }}
-        config={{ displayModeBar: false, responsive: true }}
-        style={{ width: "100%" }}
-      />
     </div>
   );
 }
