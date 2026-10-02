@@ -77,10 +77,43 @@ export function getSpcsRestAuth(): { host: string; token: string } | null {
   return { host, token: readFileSync(SPCS_TOKEN_PATH, "utf-8").trim() };
 }
 
-/** Fully-qualified name of the Cortex Agent backing the chat page. */
+/** Fully-qualified name of the Cortex Agent backing the chat page.
+ *  Kept as the default export for the category persona. */
 export const AGENT_FQN = `${DB}.${SCHEMA_AI}.${
   process.env.BABY_MART_AGENT || "CATEGORY_MANAGER_AGENT"
 }`;
+
+/** The agents this app can talk to, keyed by the id the chat page sends.
+ *
+ *  Two agents rather than one because they answer questions about different
+ *  businesses over different data: the category agent reads Baby Mart baby-goods
+ *  sell-through, the merch agent reads the merchandise plan. A single
+ *  agent holding both semantic views would happily answer a merchandise
+ *  planner's question from nappy sell-through, which is worse than having no
+ *  agent at all. */
+export const AGENTS = {
+  category: {
+    id: "category",
+    label: "Category Intelligence Agent",
+    fqn: AGENT_FQN,
+  },
+  merch: {
+    id: "merch",
+    label: "Merch Planning Agent",
+    fqn: `${DB}.${SCHEMA_AI}.${
+      process.env.BABY_MART_AGENT_MERCH || "MERCH_PLANNING_AGENT"
+    }`,
+  },
+} as const;
+
+export type AgentId = keyof typeof AGENTS;
+
+/** Resolve an agent id to its FQN, defaulting to the category agent so an older
+ *  client that sends no id keeps working. */
+export function resolveAgentFqn(id: string | null | undefined): string {
+  if (id && id in AGENTS) return AGENTS[id as AgentId].fqn;
+  return AGENT_FQN;
+}
 
 function getConnectionOptions(): snowflake.ConnectionOptions {
   // In SPCS / App Runtime: read OAuth token from filesystem
@@ -115,58 +148,142 @@ function getConnectionOptions(): snowflake.ConnectionOptions {
     database: DB,
     schema: SCHEMA_ANALYTICS,
     warehouse: WAREHOUSE,
+    // Optional, and only used for local development. Accounts reached through a
+    // non-default hostname (e.g. Snowhouse) need an explicit host, and accounts
+    // whose default role cannot see the demo namespace need an explicit role.
+    // Omitted rather than defaulted so the canonical account is unaffected.
+    ...(process.env.SNOWFLAKE_HOST ? { host: process.env.SNOWFLAKE_HOST } : {}),
+    ...(process.env.SNOWFLAKE_ROLE ? { role: process.env.SNOWFLAKE_ROLE } : {}),
   };
 }
 
-export async function querySnowflake(sql: string): Promise<SnowflakeRow[]> {
-  const conn = snowflake.createConnection(getConnectionOptions());
+/** Open a connection, using the right connect call for the authenticator.
+ *
+ *  The Node driver rejects conn.connect() for EXTERNALBROWSER with "connect()
+ *  does not work with external browser or okta authenticators, call
+ *  connectAsync()". SPCS uses OAUTH and works with either, so this only matters
+ *  for local development -- but without it local dev cannot reach Snowflake at
+ *  all, which makes every page unverifiable outside a deploy.
+ */
+async function openConnection(): Promise<snowflake.Connection> {
+  const options = getConnectionOptions();
+  const conn = snowflake.createConnection(options);
+  const needsAsync = String(options.authenticator).toUpperCase() === "EXTERNALBROWSER";
 
   return new Promise((resolve, reject) => {
-    conn.connect((err) => {
-      if (err) return reject(err);
+    const cb = (err: unknown) => (err ? reject(err) : resolve(conn));
+    if (needsAsync) {
+      conn.connectAsync(cb);
+    } else {
+      conn.connect(cb);
+    }
+  });
+}
 
-      conn.execute({
-        sqlText: remapNamespace(sql),
-        complete: (err, _stmt, rows) => {
-          conn.destroy(() => {});
-          if (err) return reject(err);
-          resolve((rows as SnowflakeRow[]) || []);
-        },
-      });
+export async function querySnowflake(sql: string): Promise<SnowflakeRow[]> {
+  const conn = await openConnection();
+
+  return new Promise((resolve, reject) => {
+    conn.execute({
+      sqlText: remapNamespace(sql),
+      complete: (err, _stmt, rows) => {
+        conn.destroy(() => {});
+        if (err) return reject(err);
+        resolve((rows as SnowflakeRow[]) || []);
+      },
     });
   });
 }
 
-export async function executeMultiple(sqls: string[]): Promise<SnowflakeRow[][]> {
-  const conn = snowflake.createConnection(getConnectionOptions());
+/** Execute a statement with BOUND parameters.
+ *
+ *  Use this for anything that writes user-supplied text. The alternative
+ *  pattern in this codebase (see src/app/api/campaign) interpolates values into
+ *  the SQL string with hand-rolled `.replace(/'/g, "''")` quote-doubling, and
+ *  passes numerics through with no escaping at all. That is both an injection
+ *  hole and a correctness bug: free-text prose containing an apostrophe --
+ *  "don't exceed 8 weeks' cover" -- either breaks the statement or silently
+ *  corrupts the stored value.
+ *
+ *  Binds hand the values to the driver separately from the SQL, so quoting stops
+ *  being the caller's problem. `?` placeholders are positional.
+ */
+export async function querySnowflakeWithBinds(
+  sql: string,
+  binds: unknown[],
+): Promise<SnowflakeRow[]> {
+  const conn = await openConnection();
 
   return new Promise((resolve, reject) => {
-    conn.connect((err) => {
-      if (err) return reject(err);
-
-      const results: SnowflakeRow[][] = [];
-      let idx = 0;
-
-      function next() {
-        if (idx >= sqls.length) {
-          conn.destroy(() => {});
-          return resolve(results);
-        }
-        conn.execute({
-          sqlText: remapNamespace(sqls[idx]),
-          complete: (err, _stmt, rows) => {
-            if (err) {
-              conn.destroy(() => {});
-              return reject(err);
-            }
-            results.push((rows as SnowflakeRow[]) || []);
-            idx++;
-            next();
-          },
-        });
-      }
-
-      next();
+    conn.execute({
+      sqlText: remapNamespace(sql),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      binds: binds as any,
+      complete: (err, _stmt, rows) => {
+        conn.destroy(() => {});
+        if (err) return reject(err);
+        resolve((rows as SnowflakeRow[]) || []);
+      },
     });
+  });
+}
+
+/** Format a Snowflake DATE as an ISO date string (YYYY-MM-DD).
+ *
+ *  The Node driver returns DATE and TIMESTAMP columns as JavaScript Date
+ *  objects, so `String(row.SOME_DATE)` yields
+ *  "Thu Jan 07 2027 00:00:00 GMT+0000 (Coordinated Universal Time)". That string
+ *  then leaks straight into chart axes and table cells, and any `.slice(0, 19)`
+ *  intended to trim an ISO timestamp silently produces garbage. Always route
+ *  date columns through here.
+ */
+export function toIsoDate(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v);
+  // Already ISO-ish: keep the date part as-is rather than re-parsing, which
+  // would shift the value across a timezone boundary.
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 10);
+}
+
+/** Format a Snowflake TIMESTAMP as "YYYY-MM-DD HH:MM:SS". Same reasoning. */
+export function toIsoDateTime(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 19).replace("T", " ");
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}[ T]/.test(s)) return s.slice(0, 19).replace("T", " ");
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 19).replace("T", " ");
+}
+
+export async function executeMultiple(sqls: string[]): Promise<SnowflakeRow[][]> {
+  const conn = await openConnection();
+
+  return new Promise((resolve, reject) => {
+    const results: SnowflakeRow[][] = [];
+    let idx = 0;
+
+    function next() {
+      if (idx >= sqls.length) {
+        conn.destroy(() => {});
+        return resolve(results);
+      }
+      conn.execute({
+        sqlText: remapNamespace(sqls[idx]),
+        complete: (err, _stmt, rows) => {
+          if (err) {
+            conn.destroy(() => {});
+            return reject(err);
+          }
+          results.push((rows as SnowflakeRow[]) || []);
+          idx++;
+          next();
+        },
+      });
+    }
+
+    next();
   });
 }

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { AGENT_FQN, getSpcsRestAuth, executeMultiple } from "@/lib/snowflake";
+import { resolveAgentFqn, getSpcsRestAuth, executeMultiple } from "@/lib/snowflake";
 
 // Streaming requires the Node runtime and must not be statically optimised.
 export const runtime = "nodejs";
@@ -42,6 +42,9 @@ export async function POST(request: NextRequest) {
   // server stays stateless across requests and container restarts.
   const incomingThreadId: number | null = body.threadId ?? null;
   const parentMessageId: number = body.parentMessageId ?? 0;
+  // Which agent to talk to. Defaults to the category agent when absent, so an
+  // older client that sends no id keeps working.
+  const agentFqn = resolveAgentFqn(body.agent);
 
   if (!message) {
     return new Response(
@@ -67,11 +70,11 @@ export async function POST(request: NextRequest) {
       try {
         const auth = getSpcsRestAuth();
         if (auth) {
-          await runWithThread(auth, message, incomingThreadId, parentMessageId, send);
+          await runWithThread(auth, agentFqn, message, incomingThreadId, parentMessageId, send);
         } else {
           // Local development: no SPCS token is mounted, so fall back to the
           // non-streaming SQL function. Threads are not used on this path.
-          await respondViaSqlFunction(message, send);
+          await respondViaSqlFunction(agentFqn, message, send);
         }
       } catch (error: unknown) {
         send({
@@ -135,6 +138,7 @@ async function createThread(auth: Auth): Promise<number> {
  */
 async function runWithThread(
   auth: Auth,
+  agentFqn: string,
   message: string,
   incomingThreadId: number | null,
   parentMessageId: number,
@@ -146,7 +150,7 @@ async function runWithThread(
     send({ type: "thread", threadId });
   }
 
-  const [db, schema, name] = AGENT_FQN.split(".");
+  const [db, schema, name] = agentFqn.split(".");
   const url = `https://${auth.host}/api/v2/databases/${db}/schemas/${schema}/agents/${name}:run`;
 
   const res = await fetch(url, {
@@ -300,6 +304,7 @@ function emitFromContent(
  * questions have no conversation history.
  */
 async function respondViaSqlFunction(
+  agentFqn: string,
   message: string,
   send: (event: ClientEvent) => void,
 ) {
@@ -310,7 +315,7 @@ async function respondViaSqlFunction(
   });
   const results = await executeMultiple([
     `SELECT TRY_PARSE_JSON(
-       SNOWFLAKE.CORTEX.DATA_AGENT_RUN('${AGENT_FQN}', $$${payload}$$)
+       SNOWFLAKE.CORTEX.DATA_AGENT_RUN('${agentFqn}', $$${payload}$$)
      ) AS RESPONSE`,
   ]);
 

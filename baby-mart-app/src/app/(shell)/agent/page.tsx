@@ -17,14 +17,123 @@ interface Message {
   tables?: TableBlock[];
 }
 
-const GREETING: Message = {
-  role: "assistant",
-  content:
-    "Hi! I'm your Category Intelligence Agent. I can help you analyse brand performance, customer segments, competitive pricing, and promotional effectiveness across all Baby Mart categories. What would you like to know?",
-};
+// ─── Result-table presentation ────────────────────────────────────────────────
+//
+// A tool result arrives as raw SQL: physical column names and unrounded numbers.
+// Printed verbatim that gave the planner "VARIANCE_TO_BUDGET_PCT" over
+// "219938238.00" while every other screen in the app says "Variance to budget"
+// over "PHP 219.9M" -- and the wide raw headers pushed the variance column, the
+// one the question was actually about, off the right edge.
+//
+// Column names carry their own type here, so the formatter is driven by the name
+// rather than by guessing from the value: a bare 40.6 could be a rate or an
+// amount, and only "GP_PCT" says which.
+
+/** SALES_BUDGET -> Sales budget.
+ *  Also trims the words that make a SQL alias verbose without adding meaning, so
+ *  a seven-column result fits the pane instead of pushing its last two columns
+ *  off the right edge. */
+function humaniseColumn(c: string): string {
+  const s = c
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\bpct\b/g, "%")
+    .replace(/\bphp\b/g, "")
+    .replace(/\bamt\b/g, "amount")
+    .replace(/\bweeks\b/g, "wks")
+    .replace(/\btotal wks\b/g, "wks")
+    .replace(/\bvalue\b/g, "")
+    .replace(/\btotal cover\b/g, "cover")
+    .replace(/\bgp\b/g, "GP")
+    .replace(/\botb\b/g, "OTB")
+    .replace(/\blfl\b/g, "LFL")
+    .replace(/\basp\b/g, "ASP")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+type ColKind = "money" | "pct" | "weeks" | "num" | "text";
+
+function columnKind(c: string): ColKind {
+  const u = c.toUpperCase();
+  if (/(_PCT|\bPCT\b|PERCENT|_PP\b)/.test(u)) return "pct";
+  if (/WEEK/.test(u)) return "weeks";
+  if (/(SALES|BUDGET|VARIANCE|GP|PHP|OTB|OPEN_TO_BUY|STOCK|ON_ORDER|COMMITTED|AMT|VALUE|COST|MARGIN)/.test(u)
+      && !/COUNT|UNITS|RANK/.test(u)) return "money";
+  if (/(COUNT|UNITS|RANK|OPTIONS|QTY)/.test(u)) return "num";
+  return "text";
+}
+
+/** PHP at the magnitude a planner reads: millions above a million, else thousands. */
+function fmtAgentMoney(n: number): string {
+  const a = Math.abs(n);
+  const sign = n < 0 ? "−" : "";
+  if (a >= 1_000_000) return `${sign}PHP ${(a / 1_000_000).toFixed(1)}M`;
+  if (a >= 1_000) return `${sign}PHP ${(a / 1_000).toFixed(0)}k`;
+  return `${sign}PHP ${a.toFixed(0)}`;
+}
+
+function fmtCell(cell: unknown, kind: ColKind): string {
+  if (cell === null || cell === undefined || cell === "") return "–";
+  const n = typeof cell === "number" ? cell : Number(String(cell).replace(/,/g, ""));
+  if (!isFinite(n) || String(cell).trim() === "") return String(cell);
+  switch (kind) {
+    case "money": return fmtAgentMoney(n);
+    case "pct":   return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+    case "weeks": return `${n.toFixed(1)}w`;
+    case "num":   return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    default:      return String(cell);
+  }
+}
+
+
+/** The two agents this page can front. Selected by the ?persona= tag the sidebar
+ *  puts on its link, so a merchandise planner and a category manager get the
+ *  agent that reads their data -- not one agent guessing between two businesses.
+ *
+ *  Read from window rather than useSearchParams: this page is statically
+ *  prerendered and useSearchParams would force it into a Suspense boundary. */
+const AGENT_PROFILES = {
+  category: {
+    id: "category",
+    title: "Category Intelligence Agent",
+    subtitle: "Powered by Cortex Agent + Semantic View",
+    greeting:
+      "Hi! I'm your Category Intelligence Agent. I can help you analyse brand performance, customer segments, competitive pricing, and promotional effectiveness across all Baby Mart categories. What would you like to know?",
+    prompts: [
+      "Top 5 brands by revenue growth this year",
+      "Which brands are losing the most customers in Nappies & Wipes?",
+      "Compare Huggies promotion effectiveness by mechanic",
+    ],
+  },
+  merch: {
+    id: "merch",
+    title: "Merch Planning Agent",
+    subtitle: "Baby Mart merchandise plan, open-to-buy and scenarios",
+    greeting:
+      "Hi! I'm your Merch Planning Agent. I can explain what is driving a variance, show you the buy position by class, rank SKU productivity, and model range or price scenarios against the Baby Mart plan. What would you like to know?",
+    prompts: [
+      "What are the drivers of PRAMS & STROLLERS being behind budget?",
+      "Which classes are overbought, and by how much?",
+      "Model rationalising the bottom 25% of TRAVEL SYSTEM in H2",
+    ],
+  },
+} as const;
+
+function activeProfile() {
+  if (typeof window === "undefined") return AGENT_PROFILES.category;
+  const p = new URLSearchParams(window.location.search).get("persona");
+  return p === "planning" ? AGENT_PROFILES.merch : AGENT_PROFILES.category;
+}
 
 export default function AgentPage() {
-  const [messages, setMessages] = useState<Message[]>([GREETING]);
+  // Resolved once on mount. The profile decides which agent the chat talks to,
+  // so it must not change mid-conversation -- a thread belongs to one agent.
+  const [profile] = useState(() => activeProfile());
+  const [messages, setMessages] = useState<Message[]>([
+    { role: "assistant", content: profile.greeting },
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -65,6 +174,7 @@ export default function AgentPage() {
           message: userMsg,
           threadId: threadId.current,
           parentMessageId: parentMessageId.current,
+          agent: profile.id,
         }),
       });
       if (!res.body) throw new Error("No response stream");
@@ -146,8 +256,8 @@ export default function AgentPage() {
             <Bot className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-900">Category Intelligence Agent</h1>
-            <p className="text-xs text-slate-500">Powered by Cortex Agent + Semantic View</p>
+            <h1 className="text-lg font-bold text-slate-900">{profile.title}</h1>
+            <p className="text-xs text-slate-500">{profile.subtitle}</p>
           </div>
         </div>
       </div>
@@ -155,10 +265,14 @@ export default function AgentPage() {
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
+            {/* An assistant turn that returned a result table gets the full
+                column width. Capping it at 85% like a chat bubble left an 8-column
+                buy-position table showing only 5 columns, hiding the variance the
+                question was about; a user message stays bubble-width. */}
+            <div className={`rounded-xl px-4 py-3 text-sm ${
               msg.role === "user"
-                ? "bg-blue-700 text-white"
-                : "bg-white border border-slate-200 text-slate-800 shadow-sm"
+                ? "max-w-[85%] bg-blue-700 text-white"
+                : `${msg.tables?.length ? "w-full" : "max-w-[85%]"} bg-white border border-slate-200 text-slate-800 shadow-sm`
             }`}>
               {msg.role === "user" ? msg.content : (
                 <>
@@ -195,16 +309,35 @@ export default function AgentPage() {
                           <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
                               {t.columns.map((c) => (
-                                <th key={c} className="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap">{c}</th>
+                                <th
+                                  key={c}
+                                  className={`px-2 py-2 font-semibold text-slate-600 align-bottom ${
+                                    columnKind(c) === "text" ? "text-left" : "text-right"
+                                  }`}
+                                >
+                                  {humaniseColumn(c)}
+                                </th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {t.rows.map((row, ri) => (
                               <tr key={ri}>
-                                {row.map((cell, ci) => (
-                                  <td key={ci} className="px-3 py-1.5 border-t border-slate-100 whitespace-nowrap">{String(cell ?? "")}</td>
-                                ))}
+                                {row.map((cell, ci) => {
+                                  const kind = columnKind(t.columns[ci] ?? "");
+                                  return (
+                                    <td
+                                      key={ci}
+                                      className={`px-2 py-1.5 border-t border-slate-100 whitespace-nowrap ${
+                                        kind === "text"
+                                          ? "text-left"
+                                          : "text-right font-mono tabular-nums"
+                                      }`}
+                                    >
+                                      {fmtCell(cell, kind)}
+                                    </td>
+                                  );
+                                })}
                               </tr>
                             ))}
                           </tbody>
@@ -251,7 +384,7 @@ export default function AgentPage() {
           </button>
         </div>
         <div className="flex gap-2 mt-2">
-          {["Top 5 brands by revenue growth this year", "Which brands are losing the most customers in Nappies & Wipes?", "Compare Huggies promotion effectiveness by mechanic"].map((q) => (
+          {profile.prompts.map((q) => (
             <button
               key={q}
               onClick={() => { setInput(q); }}

@@ -57,6 +57,37 @@ SCRIPTS=(
   "$APP_DIR/sql/08_difot_realism.sql"                    # realistic DIFOT spread
   "$APP_DIR/sql/06_adhoc_analytics_tables.sql"           # extracted ad-hoc tables
   "$APP_DIR/sql/09_battlecard_procedure.sql"             # GENERATE_BATTLECARD
+  # Baby Mart Global Planning. Strictly ordered: 11_ reads the hierarchy and
+  # calendar from 10_, 12_ derives its weekly sales from 11_, and 21_ must precede
+  # 13_ because the 13_ views CROSS JOIN the parameter pivot that 21_ creates.
+  # 21_ in turn seeds per-class cover targets from the 12_ fact, so it sits
+  # between them. 14_ reads the 13_ views.
+  "$APP_DIR/sql/10_planning_dimensions.sql"              # DIM_MERCH_HIERARCHY + DIM_FISCAL_PERIOD
+  "$APP_DIR/sql/11_planning_mfp.sql"                     # FACT_MFP_PLAN
+  "$APP_DIR/sql/12_planning_otb.sql"                     # FACT_OTB_POSITION + FACT_SUPPLIER_COMMITMENT
+  "$APP_DIR/sql/21_planning_parameters.sql"              # PLANNING_SETTING + class targets + VW_PLANNING_PARAM
+  "$APP_DIR/sql/13_planning_views.sql"                   # VW_MFP_SUMMARY / VW_OTB_SUMMARY / VW_OTB_WEEKLY / exceptions
+  "$APP_DIR/sql/14_planning_insights_procedure.sql"      # GENERATE_PLANNING_INSIGHTS
+  # Weekly grid, option range, scenario sandbox. 17_ allocates the 11_ monthly
+  # plan across weeks and reads the actuals cut-off from the 21_ pivot; 18_ needs
+  # both 11_ and 12_; 19_ defines the sandbox over the 17_ weekly fact; 20_ reads
+  # the 18_ productivity view and the 19_ impact view; 22_ audits 19_ and 20_.
+  "$APP_DIR/sql/17_planning_weekly.sql"                  # FACT_MFP_WEEKLY + VW_MFP_WEEKLY
+  "$APP_DIR/sql/18_plan_options.sql"                     # DIM_PLAN_OPTION + VW_OPTION_PRODUCTIVITY
+  "$APP_DIR/sql/19_scenario_sandbox.sql"                 # PLANNING_SCENARIO + cells + annotations + versions
+  "$APP_DIR/sql/20_scenario_procedures.sql"              # PARSE/BUILD/GOAL_SEEK/APPROVE
+  "$APP_DIR/sql/22_plan_audit.sql"                       # PLANNING_CELL_AUDIT + VW_PLAN_AUDIT
+  # Merch agent. Needs the 13_ views, the 18_ option productivity view and the
+  # 20_ scenario procedures, so it runs after all three. NOTE: its semantic view
+  # YAML addresses base tables with separate `database:` / `schema:` keys, so a
+  # namespace rewrite must handle that form as well as the dotted one.
+  "$APP_DIR/sql/23_merch_agent.sql"                      # MERCH_PLANNING_VIEW + MERCH_OPTION_SEARCH
+  # AI Assessment. 15_ provisions the SOP/template tables with CREATE TABLE IF
+  # NOT EXISTS and seeds WHEN NOT MATCHED, so a rerun preserves user-authored
+  # SOPs rather than clobbering them. 16_ reads the 13_ planning views and the
+  # DT_* aggregates, so it must follow both.
+  "$APP_DIR/sql/15_assessment_settings.sql"              # ASSESSMENT_TEMPLATE + history + runs
+  "$APP_DIR/sql/16_assessment_procedure.sql"             # GENERATE_AI_ASSESSMENT
 )
 
 echo "=============================================="
@@ -108,20 +139,22 @@ for SRC in "${SCRIPTS[@]}"; do
   fi
 done
 
-# The battlecard tool has to be spliced into the agent's existing JSON spec,
-# which is not expressible in SQL -- see the script's header.
+# The procedure tools have to be spliced into the agent's existing JSON spec,
+# which is not expressible in SQL -- see the script's header. This must run AFTER
+# retailer/sql/05_create_agent.sql, which recreates the agent and would otherwise
+# drop the spliced-in tools.
 echo ""
-echo ">>> Registering generate_battlecard on the agent"
+echo ">>> Registering procedure tools on the agent"
 AGENT_SCHEMA="${SCHEMA_PREFIX}AI"
-if "$PY" "$APP_DIR/scripts/register_battlecard_tool.py" \
+if "$PY" "$APP_DIR/scripts/register_agent_tools.py" \
      --agent "${TARGET_DB}.${AGENT_SCHEMA}.CATEGORY_MANAGER_AGENT" \
-     --procedure "${TARGET_DB}.${AGENT_SCHEMA}.GENERATE_BATTLECARD" \
+     --schema "${TARGET_DB}.${AGENT_SCHEMA}" \
      --warehouse "${TARGET_WH:-DEMO_AI_WH}" >"$WORK/agent_tool.log" 2>&1; then
   echo "    OK"
 else
   echo "    FAILED - last lines:"
   tail -10 "$WORK/agent_tool.log" | sed 's/^/      /'
-  FAILED+=("register_battlecard_tool.py")
+  FAILED+=("register_agent_tools.py")
 fi
 
 echo ""
