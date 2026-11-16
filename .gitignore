@@ -24,6 +24,10 @@ DEMO_SCRIPT.md
 # checkout with its own git history, kept for comparison only.
 anko_mfp-main copy/
 
+# Reference implementation the campaign agents and their progress trail were
+# modelled on. Kept locally for comparison only.
+customer-sentiment-health/
+
 # Snowflake logs
 snowflake.log
 
