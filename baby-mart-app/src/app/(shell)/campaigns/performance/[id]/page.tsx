@@ -1,12 +1,16 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { FastForward, Pause, Play, Search, Loader2, BookOpen, AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Th, Td, Pill, Banner, Button, Modal, Field, inputCls } from "../../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../../_components/useCmp";
 import { StageStrip, StatusPill, Prov, Verified, PLOT_LAYOUT, PLOT_CONFIG, pp, rate } from "../../_components/shared";
+import { AgentPanel } from "../../_components/agent/AgentPanel";
+import { ProgressTrail } from "../../_components/agent/ProgressTrail";
+import { AgentAnswer } from "../../_components/agent/AgentCards";
+import type { Turn } from "../../_components/agent/useAgentRun";
 import { audM, aud, num, toNum, isoDate, isoDateTime } from "@/lib/campaign/format";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
@@ -27,7 +31,6 @@ type Detail = {
   liftBy: LiftRow[]; abTest: { a: { n: number; conv: number }; b: { n: number; conv: number }; bMinusAPp: number | null; ciLowPp: number | null; ciHighPp: number | null; significant: boolean; p: number | null } | null;
   daily: Row[]; replies: Row[]; replySamples: Row[]; negReplyShare: number | null; content: Row[]; plan: Row[]; members: Row[];
 };
-type Rca = { symptom: string; hypotheses: { hypothesis: string; verdict: string; evidence: string }[]; root_cause: string; confidence: string; actions: { action: string; owner: string; expected_effect: string }[]; learning: string };
 
 export default function CampaignPerformancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -37,6 +40,9 @@ export default function CampaignPerformancePage({ params }: { params: Promise<{ 
   const tr = useCmpAction("transition");
   const pub = useCmpAction<{ published: number }>("learnings/publish");
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "warn"; text: string } | null>(null);
+  const [investigate, setInvestigate] = useState(0);
+  // ?investigate=1 (the headline findings' link) starts an investigation on arrival.
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("investigate")) setInvestigate(Date.now()); }, []);
   const [days, setDays] = useState("7");
   const [dim, setDim] = useState("Channel");
   const [pausing, setPausing] = useState(false);
@@ -108,7 +114,7 @@ export default function CampaignPerformancePage({ params }: { params: Promise<{ 
                     {a.actionKey === "SUPPRESS_STOCK" && <Button variant="primary" disabled={act.busy} onClick={() => alertAction(a, "SUPPRESS_STOCK")}>Suppress short-store members</Button>}
                     {a.actionKey === "SUPPRESS_GRIEVANCE" && <Button variant="primary" disabled={act.busy} onClick={() => alertAction(a, "SUPPRESS_GRIEVANCE")}>Suppress price complainers</Button>}
                     {a.actionKey === "PAUSE" && status === "LIVE" && <Button variant="danger" disabled={act.busy} onClick={() => alertAction(a, "PAUSE")}><Pause className="h-3.5 w-3.5" />Pause</Button>}
-                    {a.actionKey === "INVESTIGATE" && <a href="#investigate"><Button><Search className="h-3.5 w-3.5" />Investigate</Button></a>}
+                    {a.actionKey === "INVESTIGATE" && <a href="#investigate"><Button onClick={() => setInvestigate(Date.now())}><Search className="h-3.5 w-3.5" />Investigate</Button></a>}
                     <Button variant="ghost" disabled={act.busy} onClick={() => alertAction(a, "DISMISS")}>Dismiss</Button>
                   </div>
                 )}
@@ -155,14 +161,14 @@ export default function CampaignPerformancePage({ params }: { params: Promise<{ 
               <div className="mt-1 text-xs">B − A: <b>{pp(data.abTest.bMinusAPp, 2)}</b> (95% CI {data.abTest.ciLowPp?.toFixed(2)} to {data.abTest.ciHighPp?.toFixed(2)}) · {data.abTest.significant ? <Pill tone="green">winner found</Pill> : <Pill>no winner yet</Pill>}</div>
             </Card>
           )}
-          <Card title="Replies" subtitle={data.negReplyShare === null ? "No replies yet" : `${Math.round(data.negReplyShare * 100)}% negative · read by AI_COMPLETE`}>
+          <Card title="Replies" subtitle={data.negReplyShare === null ? "No replies yet" : `${Math.round(data.negReplyShare * 100)}% negative · read by AI_SENTIMENT and AI_CLASSIFY`}>
             <ul className="mb-2 space-y-0.5 text-[11px]">{data.replies.slice(0, 5).map((r, i) => <li key={i}><Pill tone={r.SENTIMENT === "negative" ? "red" : r.SENTIMENT === "positive" ? "green" : "slate"}>{String(r.SENTIMENT)}</Pill> {String(r.THEME)}: {num(toNum(r.N))}</li>)}</ul>
             <ul className="space-y-1">{data.replySamples.slice(0, 4).map((r, i) => <li key={i} className="text-[11px] text-slate-700">“{String(r.VOICE_TEXT)}” <span className="text-slate-400">· {String(r.STATE ?? "")}</span></li>)}</ul>
           </Card>
         </div>
       </div>
 
-      <Investigator id={id} />
+      <Investigator id={id} name={data.metrics.name} start={investigate} />
 
       <Card className="mt-4" title="Audit trail">
         <ul className="space-y-1 text-[11px] text-slate-700">{data.log.map((l, i) => (
@@ -190,36 +196,40 @@ function PauseModal({ id, onClose, onDone }: { id: string; onClose: () => void; 
   );
 }
 
-function Investigator({ id }: { id: string }) {
+/** The investigation: CAMPAIGN_INVESTIGATOR_AGENT with its progress trail. The
+ *  last logged run shows until a new one is asked for; an alert's Investigate
+ *  button starts one. */
+function Investigator({ id, name, start }: { id: string; name: string; start: number }) {
   const { data } = useCmp<{ latest: Row | null }>("investigation", { id });
-  const inv = useCmpAction<{ rca: Rca; verified: boolean | null; unmatched: string[] }>("investigate");
-  const [q, setQ] = useState("");
-  const [err, setErr] = useState<string | null>(null);
   const latest = data?.latest ?? null;
-  const rca = parse<Rca>(latest?.RESPONSE);
-  const unmatched = parse<string[]>(latest?.UNVERIFIED_FIGURES) ?? [];
-  const run = async () => { setErr(null); const r = await inv.run({ campaignId: id, question: q.trim() || null }); if (!r.ok) setErr(r.error); };
+  const resp = parse<{ text?: string; block?: unknown; steps?: { name: string; type: string; input: unknown; status: string | null }[] }>(latest?.RESPONSE);
+  const [asking, setAsking] = useState<{ q: string; n: number } | null>(null);
+  const question = `Why is the ${name} campaign (${id}) performing the way it is against its holdout?`;
+  useEffect(() => { if (start > 0) setAsking({ q: question, n: start }); }, [start]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saved: Turn | null = latest && resp?.text ? {
+    question: String(latest.QUESTION ?? question), text: resp.text, charts: [], done: true, startedAt: 0,
+    steps: (resp.steps ?? []).map((x, i) => ({ id: String(i), name: x.name, toolType: x.type, input: x.input, status: x.status === "success" ? "success" : "error", startedAt: 0 })),
+    run: { runId: String(latest.RUN_ID), verified: latest.IS_VERIFIED === null || latest.IS_VERIFIED === undefined ? null : latest.IS_VERIFIED === true,
+      unmatched: parse<string[]>(latest.UNVERIFIED_FIGURES) ?? [], hasBlock: !!resp.block },
+  } : null;
   return (
     <div id="investigate">
       <Card title={<span className="inline-flex items-center gap-1.5"><Search className="h-4 w-4 text-amber-600" />Investigate</span>}
-        subtitle="Computes lift by every dimension, stock at members' stores, overlapping campaigns, voice anomalies, competitor prices and replies, then has AI_COMPLETE weigh the hypotheses against that evidence."
-        right={<Button variant="primary" onClick={run} disabled={inv.busy}>{inv.busy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Investigating…</> : rca ? "Re-run" : "Find the root cause"}</Button>}>
-        <input className={inputCls} value={q} onChange={(e) => setQ(e.target.value)} disabled={inv.busy} placeholder="Optional: e.g. why is lift negative when clicks look fine?" />
-        {inv.busy && <p className="mt-2 text-[11px] text-slate-500">Gathering the evidence and testing hypotheses. About 30 seconds.</p>}
-        {err && <div className="mt-2"><Banner tone="error">{err}</Banner></div>}
-        {rca && (
-          <div className="mt-3 space-y-3">
-            <div className="flex items-start justify-between gap-2"><p className="text-sm font-semibold text-slate-900">{rca.symptom}</p><Verified v={latest?.IS_VERIFIED} unmatched={unmatched} /></div>
-            <table className="w-full text-xs"><thead><tr className="border-b border-slate-200"><Th>Hypothesis</Th><Th>Verdict</Th><Th>Evidence</Th></tr></thead>
-              <tbody>{rca.hypotheses.map((h, i) => (
-                <tr key={i} className="border-b border-slate-50 align-top"><Td className="whitespace-normal font-medium">{h.hypothesis}</Td>
-                  <Td>{h.verdict === "CONFIRMED" ? <Pill tone="red"><ShieldAlert className="mr-0.5 inline h-3 w-3" />confirmed</Pill> : h.verdict === "RULED_OUT" ? <Pill tone="slate"><CheckCircle2 className="mr-0.5 inline h-3 w-3" />ruled out</Pill> : <Pill tone="amber">inconclusive</Pill>}</Td>
-                  <Td className="whitespace-normal text-slate-600">{h.evidence}</Td></tr>))}</tbody></table>
-            <div className="rounded-md border border-red-200 bg-red-50 p-2.5 text-xs text-red-900"><b>Root cause</b> ({rca.confidence.toLowerCase()} confidence): {rca.root_cause}</div>
-            <ol className="space-y-1">{rca.actions.map((a, i) => <li key={i} className="text-xs"><Pill tone="amber">{a.owner.toLowerCase()}</Pill> <b>{a.action}</b> <span className="text-slate-500">· {a.expected_effect}</span></li>)}</ol>
-            <p className="text-xs text-slate-700"><b>For next time:</b> {rca.learning}</p>
-            <p className="text-[10px] text-slate-400">{String(latest?.MODEL)} · {num(toNum(latest?.TOTAL_TOKENS))} tokens · {String(latest?.GENERATED_BY)} {isoDateTime(latest?.GENERATED_AT)}</p>
+        subtitle="The Campaign Investigator agent pulls this campaign's evidence, tests each hypothesis (stock, price, channel, targeting, fatigue) against the holdout, quotes what customers said, and names the root cause. Every figure is checked against what its tools returned."
+        right={!asking && <Button variant="primary" onClick={() => setAsking({ q: question, n: Date.now() })}>{saved ? "Re-run" : "Find the root cause"}</Button>}>
+        {asking ? (
+          <AgentPanel key={asking.n} agent="campaignInvestigator" tag="rca" stage="INVESTIGATE" campaignId={id} autoAsk={asking.q} compact
+            placeholder="Ask a follow-up, e.g. which states should we restart in?" />
+        ) : saved ? (
+          <div className="space-y-3">
+            <p className="text-[10px] text-slate-400">Last run {isoDateTime(latest?.GENERATED_AT)} by {String(latest?.GENERATED_BY)} · {String(latest?.MODEL).replace("agent:", "")}</p>
+            <div className="grid gap-4 xl:grid-cols-[300px_1fr]">
+              <div className="h-fit"><ProgressTrail t={saved} compact /></div>
+              <AgentAnswer t={saved} tag="rca" />
+            </div>
           </div>
+        ) : (
+          <p className="text-xs text-slate-500">No investigation yet. It takes about a minute: the steps appear as the agent works.</p>
         )}
       </Card>
     </div>

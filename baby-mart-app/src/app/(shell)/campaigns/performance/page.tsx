@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { PageHeader, Card, Loading, ErrorState, Th, Td, Pill } from "../_components/ui";
 import { useCmp } from "../_components/useCmp";
-import { StageStrip, StatusPill, Prov, InsightPanel, pp, rate } from "../_components/shared";
+import { StageStrip, StatusPill, Prov, FindingsPanel, pp, rate } from "../_components/shared";
 import { audM, num } from "@/lib/campaign/format";
 
 type Camp = {
@@ -55,7 +55,7 @@ export default function PerformancePage() {
         </div>
         <p className="mt-2 text-[10px] text-slate-500">·ns: the 95% interval spans zero, so the campaign has not shown it caused anything. ROI is net incremental margin over cost.</p>
       </Card>
-      <InsightPanel surface="PERFORMANCE" placeholder="Optional: e.g. which campaigns would I cut if the budget halved?" />
+      <FindingsPanel surface="PERFORMANCE" ask="Which campaigns earned their cost against the holdout, and which would you cut if the budget halved?" />
     </div>
   );
 }

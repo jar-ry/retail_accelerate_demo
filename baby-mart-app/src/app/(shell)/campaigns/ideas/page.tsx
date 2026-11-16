@@ -7,11 +7,22 @@ import { Sparkles, Loader2, Check, X, ShieldAlert } from "lucide-react";
 import { PageHeader, Card, Loading, ErrorState, Pill, Banner, Button, Modal, Field, inputCls, Th, Td, InfoTip } from "../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../_components/useCmp";
 import { StageStrip, Verified, Prov } from "../_components/shared";
+import { AgentPanel } from "../_components/agent/AgentPanel";
+import type { IdeaBlock } from "../_components/agent/AgentCards";
+import type { Turn } from "../_components/agent/useAgentRun";
 import { INTENT_LABEL, CHANNEL_LABEL, type ChannelCode } from "@/lib/campaign/config";
 import { num, toNum, isoDateTime } from "@/lib/campaign/format";
 
 type Signals = { due: Row[]; rfm: Row[]; supply: Row[]; intent: Row[]; brandVoice: Row[]; praise: Row[]; anomalies: Row[]; competitor: Row[]; learnings: Row[]; rejected: Row[]; nbp: Row[] };
 type Guard = { level: "BLOCK" | "CAUTION"; message: string };
+
+// Ideas mode: the agent sizes and checks each idea briefly and answers with an
+// ```ideas block (agent/deploy_campaign_agents.template.sql).
+const IDEA_PROMPTS = [
+  "Give me four campaign ideas for the next six weeks, in ideas mode.",
+  "Ideas mode: three ideas to win back lapsed customers without discounting people who would come back anyway.",
+  "Ideas mode: three ideas that use what parents say they will buy next.",
+];
 
 const SIGNAL_TONE: Record<string, "teal" | "violet" | "blue" | "amber" | "red" | "green" | "slate"> = {
   LIFE_STAGE: "teal", VALUE: "violet", CATEGORY_GAP: "blue", SUPPLY: "amber", VOICE: "red", COMPETITOR: "slate", LEARNING: "green",
@@ -19,8 +30,7 @@ const SIGNAL_TONE: Record<string, "teal" | "violet" | "blue" | "amber" | "red" |
 
 export default function IdeasPage() {
   const { data, isLoading, error } = useCmp<{ signals: Signals; ideas: Row[] }>("ideas");
-  const gen = useCmpAction<{ ideas: number; verified: boolean | null; unmatched: string[] }>("ideas/generate");
-  const [focus, setFocus] = useState("");
+  const save = useCmpAction<{ ideas: number; verified: boolean | null; alreadySaved?: boolean }>("ideas/from-run");
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "warn"; text: string } | null>(null);
   const [deciding, setDeciding] = useState<{ idea: Row; decision: "ACCEPT" | "REJECT" } | null>(null);
   const [showDone, setShowDone] = useState(false);
@@ -30,11 +40,16 @@ export default function IdeasPage() {
   const s = data.signals;
   const ideas = data.ideas.filter((i) => showDone || ["NEW", "BLOCKED"].includes(String(i.STATUS)));
 
-  const generate = async () => {
+  // When the agent finishes, the server saves the ideas from the run it logged:
+  // each audience re-sized and each guardrail re-checked before it reaches the board.
+  const saveRun = async (t: Turn) => {
     setMsg(null);
-    const r = await gen.run({ focus: focus.trim() || null });
-    if (!r.ok) setMsg({ tone: "error", text: r.error });
-    else setMsg({ tone: r.data.verified === false ? "warn" : "ok", text: `${r.data.ideas} ideas generated and sized against the data.${r.data.verified === false ? ` Some numbers could not be traced to the signals: ${r.data.unmatched.slice(0, 4).join(" · ")}` : ""}` });
+    if (!t.run?.runId) return setMsg({ tone: "error", text: t.error ?? "The run was not logged, so its ideas cannot be saved." });
+    if (!t.run.hasBlock) return setMsg({ tone: "warn", text: "The agent answered without an ideas block, so nothing was added to the board. Ask it again, or ask for ideas explicitly." });
+    const r = await save.run({ runId: t.run.runId });
+    if (!r.ok) return setMsg({ tone: "error", text: r.error });
+    setMsg({ tone: t.run.verified === false ? "warn" : "ok",
+      text: `${r.data.ideas} ideas added to the board, each audience sized against the data.${t.run.verified === false ? ` Some numbers could not be traced to a tool result: ${t.run.unmatched.slice(0, 4).join(" · ")}` : ""}` });
   };
 
   return (
@@ -70,11 +85,13 @@ export default function IdeasPage() {
       </div>
 
       <Card className="mb-4" title={<span className="inline-flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-amber-600" />Generate campaign ideas</span>}
-        subtitle="AI_COMPLETE reads the signals above, past learnings and rejected ideas. Each idea's audience is then counted from the data, and guardrails are checked in code."
-        right={<Button variant="primary" onClick={generate} disabled={gen.busy}>{gen.busy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</> : "Generate ideas"}</Button>}>
-        <input className={inputCls} value={focus} onChange={(e) => setFocus(e.target.value)} disabled={gen.busy}
-          placeholder="Optional focus, e.g. car seats for the June long weekend, or win back lapsed nappy buyers" />
-        {gen.busy && <p className="mt-2 text-[11px] text-slate-500">Reading the signals, writing ideas and sizing each audience. This takes about a minute.</p>}
+        subtitle="The Campaign Builder agent reads these signals, the voice and past learnings through its tools, then proposes ideas. Each idea's audience is counted again from the data, and guardrails are checked in code, before it reaches the board.">
+        <AgentPanel agent="campaignBuilder" tag="ideas" stage="IDEATION" compact
+          samples={IDEA_PROMPTS}
+          placeholder="Ask for ideas, e.g. four ideas for the June long weekend, or ways to win back lapsed nappy buyers"
+          card={(block) => <IdeaPreview ideas={block as IdeaBlock[]} />}
+          onFinished={saveRun} />
+        {save.busy && <p className="mt-2 text-[11px] text-slate-500"><Loader2 className="mr-1 inline h-3 w-3 animate-spin" />Sizing each idea's audience and checking guardrails…</p>}
         {msg && <div className="mt-2"><Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner></div>}
       </Card>
 
@@ -128,6 +145,24 @@ export default function IdeasPage() {
         </div>
       )}
       {deciding && <Decide idea={deciding.idea} decision={deciding.decision} onClose={() => setDeciding(null)} />}
+    </div>
+  );
+}
+
+/** What the agent proposed, while the board saves it. */
+function IdeaPreview({ ideas }: { ideas: IdeaBlock[] }) {
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      {ideas.map((i, k) => (
+        <div key={k} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-semibold text-slate-900">{i.title}</div>
+            {i.signal_type && <Pill tone={SIGNAL_TONE[i.signal_type] ?? "slate"}>{i.signal_type.toLowerCase().replace("_", " ")}</Pill>}
+          </div>
+          <p className="mt-1 text-[11px] text-slate-600">{i.hypothesis}</p>
+          {i.audience?.description && <p className="mt-1 text-[11px] text-slate-500"><b>Who:</b> {i.audience.description}</p>}
+        </div>
+      ))}
     </div>
   );
 }

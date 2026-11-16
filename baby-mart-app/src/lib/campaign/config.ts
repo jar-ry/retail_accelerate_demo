@@ -55,7 +55,7 @@ export const PROVENANCE_HINT: Record<Provenance, string> = {
   MODELLED: "Modelled: consent, stock position and past campaign responses follow stated rules, not observed data.",
   SYNTHETIC: "Synthetic customer voice built from a phrase library on real purchases.",
   SIMULATED: "Produced by the campaign simulator for a campaign launched in this app.",
-  AI: "Written or read by AI_COMPLETE; numbers are checked against the figures supplied.",
+  AI: "Read or written by Snowflake AI (AI_SENTIMENT and AI_CLASSIFY for the voice, Cortex Agents for ideas and investigations, AI_COMPLETE for copy); numbers are checked against the figures the tools returned.",
 };
 
 export const QUADRANTS = ["PERSUADABLE", "SURE_THING", "LOST_CAUSE", "SLEEPING_DOG"] as const;

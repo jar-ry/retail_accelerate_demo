@@ -107,13 +107,19 @@ SCRIPTS=(
   # Campaign & CRM, in its own CAMPAIGN schema. Reads CURATED (customers,
   # purchases, stores, products, competitor prices) and the replenishment alerts,
   # so it also runs after the base layer. 41_ builds the voice on 40_'s features,
-  # 42_ reads it with AI_COMPLETE (claude-haiku-4-5, about 2,000 texts) and keeps
-  # earlier readings, and 43_ replays the campaign history through the simulator.
+  # 42_ reads it with AI_SENTIMENT and AI_CLASSIFY (about 3,600 texts, a minute)
+  # and keeps earlier readings, 43_ replays the campaign history through the
+  # simulator, 44_ and 45_ are what the two campaign agents read and call (45_ is
+  # generated from the app's TypeScript by scripts/build_cmp_tools.mjs), and the
+  # agent file creates CAMPAIGN_BUILDER_AGENT and CAMPAIGN_INVESTIGATOR_AGENT.
   # A re-run resets campaigns, audiences and ideas made in the app.
   "$APP_DIR/sql/40_cmp_foundation.sql"                   # settings, features, contact, supply, campaign tables
   "$APP_DIR/sql/41_cmp_voice.sql"                        # synthetic customer voice on real purchases
   "$APP_DIR/sql/42_cmp_enrich.sql"                       # AI enrichment of the voice + voice views
   "$APP_DIR/sql/43_cmp_history.sql"                      # response model, simulator, ten campaigns
+  "$APP_DIR/sql/44_cmp_agent_views.sql"                  # semantic views + verbatim search for the agents
+  "$APP_DIR/sql/45_cmp_agent_procs.sql"                  # the agents' procedure tools (generated)
+  "$APP_DIR/agent/deploy_campaign_agents.sql"            # Campaign Builder + Campaign Investigator agents
 )
 
 echo "=============================================="

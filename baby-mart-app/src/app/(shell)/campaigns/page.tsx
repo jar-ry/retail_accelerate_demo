@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Th, Td, Pill, Banner } from "./_components/ui";
 import { useCmp, type Row } from "./_components/useCmp";
-import { StageStrip, StatusPill, Prov, InsightPanel, PLOT_LAYOUT, PLOT_CONFIG, pp, rate } from "./_components/shared";
+import { StageStrip, StatusPill, Prov, FindingsPanel, PLOT_LAYOUT, PLOT_CONFIG, pp, rate } from "./_components/shared";
 import { AS_OF_LABEL, STAGES, STAGE_OF, type Status } from "@/lib/campaign/config";
 import { audM, num, toNum } from "@/lib/campaign/format";
 
@@ -110,7 +110,7 @@ export default function CampaignOverviewPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <InsightPanel surface="OVERVIEW" placeholder="Optional: e.g. which live campaign should I worry about first, and why?" />
+        <FindingsPanel surface="OVERVIEW" ask="Which live campaign should I worry about first, and what campaign should I run next?" />
         <Card title="What past campaigns taught us" subtitle={<>Published learnings, reused by ideation and audiences. <Link href="/campaigns/learnings" className="text-amber-700 hover:underline">All learnings</Link></>}>
           {data.learnings.length === 0
             ? <Banner>No learnings published yet. Open a measured campaign and publish what it taught.</Banner>

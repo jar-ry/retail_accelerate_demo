@@ -1,23 +1,24 @@
 -- ============================================================
 -- Campaign & CRM — reading the customer voice with AI
 --
--- One AI_COMPLETE call reads twenty distinct texts at a time and returns, for
--- each, a fixed JSON shape: sentiment and its score, sentiment per aspect, the
--- main theme, the brand named, the child's stage, what the parent plans to buy
--- next, how urgently they need a reply, and a ten-word summary. The response
--- schema is enforced, so a malformed answer comes back NULL rather than as text
--- that has to be parsed and guessed at.
+-- Snowflake's task-specific AI functions read every distinct text, as the
+-- customer-sentiment-health build does, rather than one general prompt:
+--   AI_SENTIMENT  overall sentiment plus a sentiment per aspect (availability,
+--                 price, quality, service, delivery, promotion, store);
+--   AI_CLASSIFY   the main theme, what the parent says they will buy next, and
+--                 the child's stage, each against labels with a description.
+-- Sentiment is the overall reading corrected by the aspects: a comment whose
+-- overall reads neutral but which complains about price is negative. On the
+-- 200-text probe this took agreement with the planted labels from 76% to 90%.
+-- The brand is matched against the catalogue, not extracted by a model, and
+-- urgency is a rule. No summary is written.
 --
 -- PAY ONCE PER TEXT. Enrichment is keyed on TEXT_HASH and only texts without a
--- row in VOICE_ENRICHMENT are sent, so re-running costs nothing for what has
--- already been read, and new voice (campaign replies, sql/43) is read on the next
--- call. The table is created only if missing, so a redeploy keeps every reading
--- it already paid for: drop it to re-read everything after changing the prompt.
--- Every batch's token usage is logged in VOICE_ENRICH_LOG.
---
--- Uses AI_COMPLETE rather than the single-purpose AI functions so the whole
--- reading is one call against one schema, and so it runs on accounts where only
--- AI_COMPLETE is granted.
+-- reading by the current method are sent, so re-running costs nothing for what
+-- has been read, and new voice (campaign replies, sql/43) is read on the next
+-- call. The table is created only if missing, so a redeploy keeps every reading.
+-- Readings by an earlier method (the AI_COMPLETE prompt this replaced) are
+-- re-read and overwritten. Every run is logged in VOICE_ENRICH_LOG.
 -- ============================================================
 
 USE ROLE ACCOUNTADMIN;
@@ -38,7 +39,10 @@ CREATE TABLE IF NOT EXISTS VOICE_ENRICHMENT (
   MODEL            VARCHAR,
   RUN_ID           VARCHAR,
   ENRICHED_AT      TIMESTAMP_NTZ
-) COMMENT = 'AI_COMPLETE reading of each distinct voice text.';
+) COMMENT = 'AI reading of each distinct voice text (AI_SENTIMENT + AI_CLASSIFY).';
+
+-- Which reader produced the row. Rows without it came from the AI_COMPLETE prompt.
+ALTER TABLE VOICE_ENRICHMENT ADD COLUMN IF NOT EXISTS ENRICH_METHOD VARCHAR;
 
 CREATE TABLE IF NOT EXISTS VOICE_ENRICH_LOG (
   RUN_ID             VARCHAR,
@@ -49,12 +53,10 @@ CREATE TABLE IF NOT EXISTS VOICE_ENRICH_LOG (
   PROMPT_TOKENS      NUMBER,
   COMPLETION_TOKENS  NUMBER,
   LOGGED_AT          TIMESTAMP_NTZ
-) COMMENT = 'Token usage per enrichment batch.';
+) COMMENT = 'One row per enrichment run: texts sent and read.';
 
--- The enrichment, as a procedure so the app and later scripts can call it for
--- whatever is new. P_MAX_TEXTS caps one call's spend. The model is fixed here
--- (claude-haiku-4-5: fast, cheap, and plenty for a ten-field reading) because
--- AI_COMPLETE takes its model as a literal.
+-- The enrichment, as a procedure so the simulator (sql/43) and later scripts can
+-- call it for whatever is new. P_MAX_TEXTS caps one call's spend.
 CREATE OR REPLACE PROCEDURE ENRICH_VOICE(P_MAX_TEXTS NUMBER)
 RETURNS VARIANT
 LANGUAGE SQL
@@ -62,7 +64,7 @@ EXECUTE AS CALLER
 AS
 $$
 DECLARE
-  model VARCHAR DEFAULT 'claude-haiku-4-5';
+  method VARCHAR DEFAULT 'BUILTIN_V1';
   run_id VARCHAR;
   pending NUMBER;
   added NUMBER;
@@ -71,89 +73,110 @@ BEGIN
   run_id := 'ENR-' || TO_CHAR(CURRENT_TIMESTAMP(), 'YYYYMMDDHH24MISSFF3');
 
   CREATE OR REPLACE TEMPORARY TABLE ENRICH_TODO AS
-  SELECT TEXT_HASH, VOICE_TEXT,
-         FLOOR((ROW_NUMBER() OVER (ORDER BY TEXT_HASH) - 1) / 20) AS BATCH_NO,
-         1 + MOD(ROW_NUMBER() OVER (ORDER BY TEXT_HASH) - 1, 20) AS IDX
-  FROM (SELECT t.TEXT_HASH, t.VOICE_TEXT FROM BABY_MART_DEMO.CAMPAIGN.VOICE_TEXT t
-        WHERE NOT EXISTS (SELECT 1 FROM BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT e WHERE e.TEXT_HASH = t.TEXT_HASH)
-        QUALIFY ROW_NUMBER() OVER (ORDER BY t.TEXT_HASH) <= :P_MAX_TEXTS);
+  SELECT t.TEXT_HASH, t.VOICE_TEXT FROM BABY_MART_DEMO.CAMPAIGN.VOICE_TEXT t
+  LEFT JOIN BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT e ON e.TEXT_HASH = t.TEXT_HASH
+  WHERE e.TEXT_HASH IS NULL OR COALESCE(e.ENRICH_METHOD, '') <> :method
+  QUALIFY ROW_NUMBER() OVER (ORDER BY t.TEXT_HASH) <= :P_MAX_TEXTS;
   SELECT COUNT(*) INTO :pending FROM ENRICH_TODO;
   IF (pending = 0) THEN
     RETURN OBJECT_CONSTRUCT('ok', TRUE, 'run_id', run_id, 'sent', 0, 'enriched', 0, 'still_pending', 0);
   END IF;
 
+  -- The labels carry descriptions: AI_CLASSIFY matches on them, and the planted
+  -- confusions (a sold-out promoted item, a "which seat should I buy" question)
+  -- are spelled out the way the old prompt spelled them out.
   CREATE OR REPLACE TEMPORARY TABLE ENRICH_RESULT AS
-  WITH req AS (
-    SELECT BATCH_NO, ARRAY_AGG(OBJECT_CONSTRUCT('i', IDX, 'text', VOICE_TEXT)) WITHIN GROUP (ORDER BY IDX) AS ITEMS, COUNT(*) AS N
-    FROM ENRICH_TODO GROUP BY BATCH_NO
-  )
-  SELECT BATCH_NO, N, AI_COMPLETE(
-    model => 'claude-haiku-4-5',
-    prompt => 'You read customer comments for Baby Mart, an Australian retailer of baby products: nappies and wipes, feeding, clothing, car seats, prams and strollers. Return exactly one item per comment, carrying the same i.
+  SELECT TEXT_HASH, VOICE_TEXT,
+    AI_SENTIMENT(VOICE_TEXT, ['availability', 'price', 'quality', 'service', 'delivery', 'promotion', 'store']) AS S,
+    AI_CLASSIFY(VOICE_TEXT, [
+      {'label': 'Out of stock', 'description': 'the product the customer wanted was unavailable, sold out, an empty shelf or not in stock at their store, including a promoted item that had sold out'},
+      {'label': 'Product quality and safety', 'description': 'the product itself: it broke, was faulty, poorly made, unsafe, leaked or caused a rash, or praise for how well it works'},
+      {'label': 'Price and value', 'description': 'the price, cost, being cheaper elsewhere, price matching, or value for money'},
+      {'label': 'Staff and expert advice', 'description': 'staff help, a car seat fitting, or expert product advice from team members'},
+      {'label': 'Delivery and click and collect', 'description': 'home delivery, shipping, click and collect, order pickup or late parcels'},
+      {'label': 'Returns and refunds', 'description': 'returning an item, exchanges, refunds or the returns policy'},
+      {'label': 'Range and choice', 'description': 'the selection of products, sizes or brands, a question about which product to buy, or a routine shop with nothing else to report'},
+      {'label': 'Store experience', 'description': 'the store itself: layout, cleanliness, queues, parking or the parents room'},
+      {'label': 'App and website', 'description': 'the Baby Mart app or website, checkout errors, login or browsing online'},
+      {'label': 'Promotions and offers', 'description': 'a sale, discount code, voucher, promotion, loyalty points or a campaign message'}
+    ], {'task_description': 'The main reason for a customer comment to Baby Mart, an Australian baby products retailer'}) AS T,
+    AI_CLASSIFY(VOICE_TEXT, [
+      {'label': 'CAR_SEAT_UPGRADE', 'description': 'the parent states they plan to buy a bigger, next-stage or convertible car seat or booster'},
+      {'label': 'PRAM_OR_STROLLER', 'description': 'the parent states they plan to buy a pram, stroller or travel system'},
+      {'label': 'FEEDING', 'description': 'the parent states they plan to buy bottles, a breast pump, a high chair, formula or feeding gear'},
+      {'label': 'NAPPY_STAGE_CHANGE', 'description': 'the parent states they plan to move to a bigger nappy size, pull-ups or training pants'},
+      {'label': 'NURSERY_OR_CLOTHING', 'description': 'the parent states they plan to buy a cot, nursery furniture or baby clothes'},
+      {'label': 'NONE', 'description': 'the comment is about something already bought or experienced and states no plan to buy anything next'}
+    ], {'task_description': 'Whether the parent states a plan to buy something next, and what'}) AS I,
+    AI_CLASSIFY(VOICE_TEXT, [
+      {'label': 'EXPECTING', 'description': 'pregnant, expecting, or the baby is due soon'},
+      {'label': 'NEWBORN_0_3M', 'description': 'a newborn, or a baby of 0 to 3 months'},
+      {'label': 'INFANT_3_12M', 'description': 'a baby of 3 to 12 months'},
+      {'label': 'TODDLER_1_3Y', 'description': 'a toddler aged 1 to 3'},
+      {'label': 'PRESCHOOL_3_5Y', 'description': 'a child aged 3 to 5'},
+      {'label': 'SCHOOL_5_PLUS', 'description': 'a school-age child'},
+      {'label': 'MULTIPLE', 'description': 'more than one young child: twins, or a toddler and a newborn'},
+      {'label': 'UNKNOWN', 'description': 'the age of the child is not stated'}
+    ], {'task_description': 'The age of the child the comment mentions'}) AS G
+  FROM ENRICH_TODO;
 
-For each comment:
-- sentiment: positive, negative, neutral or mixed. Mixed means it contains both a clear positive and a clear negative.
-- sentiment_score: from -1 (very negative) to 1 (very positive).
-- theme: the main driver of the comment, exactly one of: Out of stock | Product quality and safety | Price and value | Staff and expert advice | Delivery and click and collect | Returns and refunds | Range and choice | Store experience | App and website | Promotions and offers. A promoted item that is sold out is Out of stock. A question about which product to buy is Range and choice unless it asks for a fitting or advice from staff.
-- aspects: for each of availability, price, quality, service, delivery, promotion and store that the comment actually talks about, its sentiment (positive, negative or neutral). Leave out aspects it does not mention.
-- brand: the product brand named, exactly as written, or none. Baby Mart is the retailer, not a brand; Big W and Amazon are competitors, not brands.
-- child_stage: the age of the child if the comment states it, else UNKNOWN. EXPECTING (pregnant or baby due), NEWBORN_0_3M, INFANT_3_12M, TODDLER_1_3Y, PRESCHOOL_3_5Y, SCHOOL_5_PLUS, or MULTIPLE for more than one young child (twins, or a toddler and a newborn).
-- purchase_intent: what the customer says they will buy next: CAR_SEAT_UPGRADE (a bigger or convertible car seat), PRAM_OR_STROLLER, FEEDING, NAPPY_STAGE_CHANGE (a different nappy size or pull-ups), NURSERY_OR_CLOTHING, or NONE.
-- urgency: HIGH if the customer needs a reply or says they will shop elsewhere, MEDIUM for any other complaint, LOW otherwise.
-- summary: ten words at most.
-
-Comments as JSON, an array of {i, text}:
-' || TO_JSON(ITEMS),
-    model_parameters => {'temperature': 0, 'max_tokens': 4096},
-    response_format => {
-      'type': 'json',
-      'schema': {
-        'type': 'object',
-        'properties': {
-          'items': {'type': 'array', 'items': {'type': 'object', 'properties': {
-            'i': {'type': 'integer'},
-            'sentiment': {'type': 'string', 'enum': ['positive', 'negative', 'neutral', 'mixed']},
-            'sentiment_score': {'type': 'number'},
-            'theme': {'type': 'string', 'enum': ['Out of stock', 'Product quality and safety', 'Price and value', 'Staff and expert advice',
-                      'Delivery and click and collect', 'Returns and refunds', 'Range and choice', 'Store experience', 'App and website', 'Promotions and offers']},
-            'aspects': {'type': 'array', 'items': {'type': 'object', 'properties': {
-              'aspect': {'type': 'string', 'enum': ['availability', 'price', 'quality', 'service', 'delivery', 'promotion', 'store']},
-              'sentiment': {'type': 'string', 'enum': ['positive', 'negative', 'neutral']}}, 'required': ['aspect', 'sentiment']}},
-            'brand': {'type': 'string'},
-            'child_stage': {'type': 'string', 'enum': ['EXPECTING', 'NEWBORN_0_3M', 'INFANT_3_12M', 'TODDLER_1_3Y', 'PRESCHOOL_3_5Y', 'SCHOOL_5_PLUS', 'MULTIPLE', 'UNKNOWN']},
-            'purchase_intent': {'type': 'string', 'enum': ['CAR_SEAT_UPGRADE', 'PRAM_OR_STROLLER', 'FEEDING', 'NAPPY_STAGE_CHANGE', 'NURSERY_OR_CLOTHING', 'NONE']},
-            'urgency': {'type': 'string', 'enum': ['HIGH', 'MEDIUM', 'LOW']},
-            'summary': {'type': 'string'}},
-            'required': ['i', 'sentiment', 'sentiment_score', 'theme', 'aspects', 'brand', 'child_stage', 'purchase_intent', 'urgency', 'summary']}}},
-        'required': ['items']}},
-    show_details => TRUE) AS R
-  FROM req;
-
-  INSERT INTO BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICH_LOG
-  SELECT :run_id, BATCH_NO, :model, N, ARRAY_SIZE(R:structured_output[0]:raw_message:items),
-         R:usage:prompt_tokens::NUMBER, R:usage:completion_tokens::NUMBER, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ
-  FROM ENRICH_RESULT;
-
-  INSERT INTO BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT
-  SELECT t.TEXT_HASH,
-         x.V:sentiment::STRING, x.V:sentiment_score::FLOAT, x.V:theme::STRING, x.V:aspects,
-         NULLIF(NULLIF(LOWER(TRIM(x.V:brand::STRING)), 'none'), '')::STRING,
-         x.V:child_stage::STRING, x.V:purchase_intent::STRING, x.V:urgency::STRING, x.V:summary::STRING,
-         :model, :run_id, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ
-  FROM (SELECT r.BATCH_NO, f.value AS V, f.index AS IX
-        FROM ENRICH_RESULT r, LATERAL FLATTEN(input => r.R:structured_output[0]:raw_message:items) f) x
-  JOIN ENRICH_TODO t ON t.BATCH_NO = x.BATCH_NO AND t.IDX = x.V:i::NUMBER
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY t.TEXT_HASH ORDER BY x.IX) = 1;
+  MERGE INTO BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT tgt
+  USING (
+    WITH r AS (
+      SELECT TEXT_HASH, VOICE_TEXT,
+             S:categories[0]:sentiment::STRING AS OVERALL,
+             FILTER(S:categories, c -> c:name::STRING <> 'overall' AND c:sentiment::STRING IN ('positive', 'negative', 'mixed')) AS ASP,
+             ARRAY_SIZE(FILTER(S:categories, c -> c:name::STRING <> 'overall' AND c:sentiment::STRING = 'negative')) AS NEGS,
+             ARRAY_SIZE(FILTER(S:categories, c -> c:name::STRING <> 'overall' AND c:sentiment::STRING = 'positive')) AS POSS,
+             T:labels[0]::STRING AS THEME, I:labels[0]::STRING AS INTENT, G:labels[0]::STRING AS STAGE
+      FROM ENRICH_RESULT
+    ), s AS (
+      -- The overall reading, corrected by the aspects it names.
+      SELECT r.*, CASE WHEN NEGS > 0 AND POSS > 0 THEN 'mixed' WHEN NEGS > 0 THEN 'negative'
+                       WHEN OVERALL = 'neutral' AND POSS > 0 THEN 'positive' ELSE COALESCE(OVERALL, 'neutral') END AS SENT
+      FROM r
+    ), b AS (
+      -- The longest catalogue brand the text names.
+      SELECT s.TEXT_HASH, LOWER(d.BRAND_NAME) AS BRAND
+      FROM s JOIN BABY_MART_DEMO.CURATED.DIM_BRAND d ON CONTAINS(LOWER(s.VOICE_TEXT), LOWER(d.BRAND_NAME))
+      QUALIFY ROW_NUMBER() OVER (PARTITION BY s.TEXT_HASH ORDER BY LENGTH(d.BRAND_NAME) DESC) = 1
+    )
+    SELECT s.TEXT_HASH, s.SENT AS SENTIMENT,
+           DECODE(s.SENT, 'positive', 1, 'negative', -1, 0)::FLOAT AS SENTIMENT_SCORE,
+           s.THEME,
+           TRANSFORM(s.ASP, c -> OBJECT_CONSTRUCT('aspect', c:name, 'sentiment', c:sentiment)) AS ASPECTS,
+           b.BRAND AS BRAND_MENTIONED, COALESCE(s.STAGE, 'UNKNOWN') AS CHILD_STAGE, COALESCE(s.INTENT, 'NONE') AS PURCHASE_INTENT,
+           -- HIGH: a safety or availability complaint, or a customer saying they
+           -- will go elsewhere. MEDIUM: any other complaint.
+           CASE WHEN s.SENT IN ('negative', 'mixed')
+                     AND (s.THEME IN ('Product quality and safety', 'Out of stock')
+                          OR REGEXP_LIKE(LOWER(s.VOICE_TEXT), '.*(elsewhere|big w|amazon|never again|cancel|unsubscribe|go somewhere else|shop somewhere).*')) THEN 'HIGH'
+                WHEN s.SENT IN ('negative', 'mixed') THEN 'MEDIUM' ELSE 'LOW' END AS URGENCY
+    FROM s LEFT JOIN b ON b.TEXT_HASH = s.TEXT_HASH
+  ) src ON tgt.TEXT_HASH = src.TEXT_HASH
+  WHEN MATCHED THEN UPDATE SET SENTIMENT = src.SENTIMENT, SENTIMENT_SCORE = src.SENTIMENT_SCORE, THEME = src.THEME, ASPECTS = src.ASPECTS,
+    BRAND_MENTIONED = src.BRAND_MENTIONED, CHILD_STAGE = src.CHILD_STAGE, PURCHASE_INTENT = src.PURCHASE_INTENT, URGENCY = src.URGENCY,
+    SUMMARY = NULL, MODEL = 'AI_SENTIMENT + AI_CLASSIFY', RUN_ID = :run_id, ENRICHED_AT = CURRENT_TIMESTAMP()::TIMESTAMP_NTZ, ENRICH_METHOD = :method
+  WHEN NOT MATCHED THEN INSERT (TEXT_HASH, SENTIMENT, SENTIMENT_SCORE, THEME, ASPECTS, BRAND_MENTIONED, CHILD_STAGE, PURCHASE_INTENT, URGENCY,
+    SUMMARY, MODEL, RUN_ID, ENRICHED_AT, ENRICH_METHOD)
+  VALUES (src.TEXT_HASH, src.SENTIMENT, src.SENTIMENT_SCORE, src.THEME, src.ASPECTS, src.BRAND_MENTIONED, src.CHILD_STAGE, src.PURCHASE_INTENT,
+    src.URGENCY, NULL, 'AI_SENTIMENT + AI_CLASSIFY', :run_id, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ, :method);
   added := SQLROWCOUNT;
 
+  INSERT INTO BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICH_LOG
+  SELECT :run_id, 1, 'AI_SENTIMENT + AI_CLASSIFY', :pending, :added, NULL, NULL, CURRENT_TIMESTAMP()::TIMESTAMP_NTZ;
+
   SELECT COUNT(*) INTO :still_pending FROM BABY_MART_DEMO.CAMPAIGN.VOICE_TEXT t
-  WHERE NOT EXISTS (SELECT 1 FROM BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT e WHERE e.TEXT_HASH = t.TEXT_HASH);
-  RETURN OBJECT_CONSTRUCT('ok', TRUE, 'run_id', run_id, 'sent', pending, 'enriched', added, 'still_pending', still_pending);
+  LEFT JOIN BABY_MART_DEMO.CAMPAIGN.VOICE_ENRICHMENT e ON e.TEXT_HASH = t.TEXT_HASH
+  WHERE e.TEXT_HASH IS NULL OR COALESCE(e.ENRICH_METHOD, '') <> :method;
+  RETURN OBJECT_CONSTRUCT('ok', TRUE, 'run_id', run_id, 'method', method, 'sent', pending, 'enriched', added, 'still_pending', still_pending);
 END;
 $$;
 
--- Read everything. A second pass picks up any batch whose answer was cut off.
-CALL ENRICH_VOICE(20000);
+-- Readings of texts the voice no longer holds (sql/41 rebuilt them) are dropped.
+DELETE FROM VOICE_ENRICHMENT WHERE TEXT_HASH NOT IN (SELECT TEXT_HASH FROM VOICE_TEXT);
+
+-- Read everything.
 CALL ENRICH_VOICE(20000);
 
 -- Brand names back in their catalogue casing, so they join to DIM_BRAND.
@@ -165,7 +188,7 @@ SELECT LOWER(BRAND_NAME) AS BRAND_LOWER, BRAND_NAME FROM BABY_MART_DEMO.CURATED.
 -- score only has no text: it keeps its NPS and scores 0 sentiment, the way a
 -- 7-out-of-10 with no comment reads.
 CREATE OR REPLACE VIEW VW_CUSTOMER_VOICE
-  COMMENT = 'Every customer voice item with its AI reading, store, customer segment and NPS class. SYNTHETIC text, AI_COMPLETE reading.'
+  COMMENT = 'Every customer voice item with its AI reading, store, customer segment and NPS class. SYNTHETIC text, AI_SENTIMENT + AI_CLASSIFY reading.'
 AS
 SELECT v.VOICE_ID, v.SOURCE, v.EVENT_DATE,
        DATE_TRUNC('week', v.EVENT_DATE)::DATE  AS EVENT_WEEK,

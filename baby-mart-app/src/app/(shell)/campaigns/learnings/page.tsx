@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { PageHeader, Card, Loading, ErrorState, Th, Td, Pill, Banner } from "../_components/ui";
 import { useCmp, type Row } from "../_components/useCmp";
-import { StageStrip, InsightPanel, pp, rate } from "../_components/shared";
+import { StageStrip, FindingsPanel, pp, rate } from "../_components/shared";
 import { num, toNum, isoDateTime } from "@/lib/campaign/format";
 
 export default function LearningsPage() {
@@ -32,7 +32,7 @@ export default function LearningsPage() {
           </table>
         )}
       </Card>
-      <InsightPanel surface="LEARNINGS" placeholder="Optional: e.g. when does SMS beat email for us?" />
+      <FindingsPanel surface="LEARNINGS" ask="What have our measured campaigns taught us, and when does SMS beat email for us?" />
     </div>
   );
 }

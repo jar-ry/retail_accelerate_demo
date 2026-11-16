@@ -26,7 +26,7 @@ export async function searchVoice(params: URLSearchParams) {
   const where: string[] = ["VOICE_TEXT IS NOT NULL", `EVENT_DATE <= ${S}.CMP_AS_OF()`];
   const binds: unknown[] = [];
   const text = (params.get("q") ?? "").trim().slice(0, 100);
-  if (text) { where.push("(VOICE_TEXT ILIKE ? OR SUMMARY ILIKE ?)"); binds.push(`%${text}%`, `%${text}%`); }
+  if (text) { where.push("VOICE_TEXT ILIKE ?"); binds.push(`%${text}%`); }
   const pick = (k: string, allowed: readonly string[], col: string) => {
     const v = params.get(k);
     if (v && allowed.includes(v)) { where.push(`${col} = ?`); binds.push(v); }
@@ -41,7 +41,7 @@ export async function searchVoice(params: URLSearchParams) {
   if (campaign && /^[\w-]{1,40}$/.test(campaign)) { where.push("CAMPAIGN_ID = ?"); binds.push(campaign); }
   const rows = await q(
     `SELECT VOICE_ID, SOURCE, EVENT_DATE, STATE, STORE_NAME, BRAND_NAME, CATEGORY, CAMPAIGN_ID, NPS_SCORE, STAR_RATING, VOICE_TEXT,
-            SENTIMENT, SENTIMENT_SCORE, THEME, CHILD_STAGE_MENTIONED, PURCHASE_INTENT, URGENCY, SUMMARY, SEGMENT_NAME, PROVENANCE
+            SENTIMENT, SENTIMENT_SCORE, THEME, CHILD_STAGE_MENTIONED, PURCHASE_INTENT, URGENCY, SEGMENT_NAME, PROVENANCE
      FROM ${S}.VW_CUSTOMER_VOICE WHERE ${where.join(" AND ")}
      ORDER BY EVENT_DATE DESC, VOICE_ID LIMIT 60`, binds);
   const counts = await q(`SELECT COUNT(*) AS N FROM ${S}.VW_CUSTOMER_VOICE WHERE ${where.join(" AND ")}`, binds);

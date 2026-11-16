@@ -86,13 +86,28 @@ def transform(sql: str, target_db: str, target_wh: str, target_role: str) -> str
     #
     # The negative lookbehind prevents matching an already-rewritten name such
     # as TEMP.JARCHEN_CURATED. (preceded by '.' or a word character).
+    #
+    # Not inside a JavaScript procedure body: there "raw." or "app." is a
+    # variable, and the match is case-insensitive (sql/45 embeds a bundle of the
+    # app's TypeScript). Those bodies name objects fully qualified, which step 3
+    # has already rewritten.
+    js_bodies: list[str] = []
+
+    def _stash_js(match):
+        js_bodies.append(match.group(2))
+        return f"{match.group(1)}\x00JS{len(js_bodies) - 1}\x00{match.group(3)}"
+
+    sql = re.sub(r"(LANGUAGE\s+JAVASCRIPT\b.*?\bAS\s*\$\$)(.*?)(\$\$)", _stash_js, sql, flags=re.IGNORECASE | re.DOTALL)
+    # Upper case and followed by an identifier: the SQL here writes schema names
+    # in capitals, and prose does not -- "set up the campaign." in an agent's
+    # instructions is a sentence, not CAMPAIGN.<object>.
     for old_schema, new_schema in SCHEMA_MAP.items():
         sql = re.sub(
-            rf"(?<![\w.]){old_schema}\.",
+            rf"(?<![\w.]){old_schema}\.(?=[A-Z_\"$])",
             f"{new_schema}.",
             sql,
-            flags=re.IGNORECASE,
         )
+    sql = re.sub(r"\x00JS(\d+)\x00", lambda m: js_bodies[int(m.group(1))], sql)
 
     # --- 4. USE SCHEMA with a bare schema name ---------------------------
     # Must run before the generic USE DATABASE rewrite so we can still tell

@@ -383,6 +383,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       through: idea, audience, content and channels, measurement. */}
                   <NavItem href="/campaigns" icon={LayoutDashboard} label="Overview" color="amber" />
                   <SectionLabel>1 · Ideation</SectionLabel>
+                  <NavItem href="/campaigns/builder" icon={Bot} label="Campaign Builder" color="amber" />
                   <NavItem href="/campaigns/ideas" icon={Lightbulb} label="Ideas" color="amber" />
                   <NavItem href="/campaigns/voice" icon={MessageSquareText} label="Customer voice" color="amber" />
                   <SectionLabel>2 · Audience</SectionLabel>

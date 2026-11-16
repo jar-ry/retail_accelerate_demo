@@ -47,7 +47,7 @@ export default function VoicePage() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Customer voice" subtitle="Surveys, reviews, care contacts, social and campaign replies, read by AI_COMPLETE for sentiment, theme, child stage and purchase intent." />
+      <PageHeader title="Customer voice" subtitle="Surveys, reviews, care contacts, social and campaign replies, read by AI_SENTIMENT and AI_CLASSIFY for sentiment, theme, child stage and purchase intent." />
       <StageStrip current={1} />
       <Banner tone="warn">The verbatims are synthetic: built from a phrase library on real Baby Mart purchases, stores and dates, with planted storylines. Every AI reading of them is real and logged.</Banner>
 
@@ -56,7 +56,7 @@ export default function VoicePage() {
         <Tile label="Survey responses, 28 days" value={num(toNum(k.RESPONSES_28D))} />
         <Tile label="Average sentiment, 28 days" value={toNum(k.SENTIMENT_28D) === null ? "–" : num(toNum(k.SENTIMENT_28D), 2)} sub="-1 to +1, from AI_SENTIMENT" />
         <Tile label="High-urgency items, 28 days" value={num(toNum(k.HIGH_URGENCY_28D))} subClass="text-red-600" />
-        <Tile label="Read by AI" value={`${num(toNum(k.ENRICHED_ITEMS))} / ${num(toNum(k.WITH_TEXT))}`} sub="Texts enriched by AI_COMPLETE"
+        <Tile label="Read by AI" value={`${num(toNum(k.ENRICHED_ITEMS))} / ${num(toNum(k.WITH_TEXT))}`} sub="Texts read by AI_SENTIMENT and AI_CLASSIFY"
           hint={data.quality ? `Theme agreement with the planted label: ${num((toNum(data.quality.THEME_AGREEMENT) ?? 0) * 100, 0)}%` : undefined} />
       </div>
 
@@ -87,7 +87,7 @@ export default function VoicePage() {
                 <Td align="right" mono className={(toNum(b.NEGATIVE_PCT) ?? 0) >= 20 ? "text-red-600 font-semibold" : ""}>{num(toNum(b.NEGATIVE_PCT), 0)}%</Td><Td className="text-slate-500">{String(b.TOP_NEGATIVE_THEME ?? "–")}</Td></tr>
             ))}</tbody></table>
         </Card>
-        <Card title="What they say they will buy next" subtitle="Purchase intent extracted by AI_COMPLETE">
+        <Card title="What they say they will buy next" subtitle="Purchase intent classified by AI_CLASSIFY">
           <ul className="space-y-1 text-xs">{data.intent.map((x, i) => <li key={i}>{INTENT_LABEL[String(x.PURCHASE_INTENT)] ?? String(x.PURCHASE_INTENT)}: <b>{num(toNum(x.CUSTOMERS))}</b> parents</li>)}</ul>
           <div className="mt-2 text-[11px] text-slate-500">Use "Said they will buy next" as an audience filter.</div>
         </Card>
@@ -125,14 +125,13 @@ export default function VoicePage() {
                     <Prov p={r.PROVENANCE as string} />
                   </div>
                   <p className="mt-0.5 text-xs text-slate-800">“{String(r.VOICE_TEXT)}”</p>
-                  {r.SUMMARY ? <p className="text-[11px] italic text-slate-500">AI: {String(r.SUMMARY)}</p> : null}
                 </li>
               ))}
             </ul>
           </>
         )}
       </Card>
-      {data.enrichCost && <p className="mt-3 text-[10px] text-slate-400">Enrichment: {num(toNum(data.enrichCost.TEXTS))} texts read by claude-haiku-4-5 in {num(toNum(data.enrichCost.BATCHES))} batches, {num((toNum(data.enrichCost.PROMPT_TOKENS) ?? 0) + (toNum(data.enrichCost.COMPLETION_TOKENS) ?? 0))} tokens.</p>}
+      {data.enrichCost && <p className="mt-3 text-[10px] text-slate-400">Enrichment: {num(toNum(data.enrichCost.TEXTS))} distinct texts read by {String(data.enrichCost.MODEL ?? "AI_SENTIMENT + AI_CLASSIFY")}, each once; urgency is a rule and brands are matched to the catalogue.</p>}
     </div>
   );
 }

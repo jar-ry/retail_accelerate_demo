@@ -5,6 +5,7 @@ import { batch, q, tx, CmpError, NOW, type Row } from "../db";
 import * as SQL from "../sql";
 import { loadPortfolio } from "../measure";
 import { MODELS } from "../config";
+import { computeFindings, SURFACES, type Surface } from "../findings";
 
 export async function getOverview() {
   const [{ campaigns, settings, asOf }, rows] = await Promise.all([
@@ -72,7 +73,13 @@ export async function getOffers() {
   return { offers, channels, usage };
 }
 
-export async function getInsight(surface: string | null) {
-  const r = await q(SQL.SQL_LATEST_RUN, [String(surface ?? "").toUpperCase()]);
-  return { latest: (r[0] as Row | undefined) ?? null };
+/** Headline findings for a screen, computed (../findings.ts). */
+export async function getFindings(surfaceRaw: string | null) {
+  const surface = String(surfaceRaw ?? "").toUpperCase();
+  if (!(SURFACES as readonly string[]).includes(surface)) throw new CmpError(400, `No findings for '${surfaceRaw}'.`);
+  const [{ campaigns, asOf }, learnings] = await Promise.all([
+    loadPortfolio(),
+    surface === "LEARNINGS" ? q(SQL.SQL_LEARNINGS) : Promise.resolve([] as Row[]),
+  ]);
+  return { surface, asOf, findings: computeFindings(surface as Surface, campaigns, learnings) };
 }

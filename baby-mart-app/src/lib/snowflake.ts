@@ -105,14 +105,28 @@ export const AGENTS = {
       process.env.BABY_MART_AGENT_MERCH || "MERCH_PLANNING_AGENT"
     }`,
   },
+  // The campaign persona's two agents live with its data in the campaign schema
+  // (agent/deploy_campaign_agents.sql). Same rule as above: a builder that could
+  // also answer investigations would blur the two jobs' instructions.
+  campaignBuilder: {
+    id: "campaignBuilder",
+    label: "Campaign Builder",
+    fqn: `${process.env.CAMPAIGN_SCHEMA?.trim() || `${DB}.CAMPAIGN`}.CAMPAIGN_BUILDER_AGENT`,
+  },
+  campaignInvestigator: {
+    id: "campaignInvestigator",
+    label: "Campaign Investigator",
+    fqn: `${process.env.CAMPAIGN_SCHEMA?.trim() || `${DB}.CAMPAIGN`}.CAMPAIGN_INVESTIGATOR_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;
 
 /** Resolve an agent id to its FQN, defaulting to the category agent so an older
- *  client that sends no id keeps working. */
+ *  client that sends no id keeps working. Own keys only: `"constructor" in AGENTS`
+ *  is true. */
 export function resolveAgentFqn(id: string | null | undefined): string {
-  if (id && id in AGENTS) return AGENTS[id as AgentId].fqn;
+  if (id && Object.hasOwn(AGENTS, id)) return AGENTS[id as AgentId].fqn;
   return AGENT_FQN;
 }
 

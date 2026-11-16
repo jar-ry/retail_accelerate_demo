@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CmpError } from "@/lib/campaign/db";
 import { sessionUser } from "@/lib/hop/session";
-import { getOverview, getSettings, postSettings, getOffers, getInsight } from "@/lib/campaign/handlers/overview";
+import { getOverview, getSettings, postSettings, getOffers, getFindings } from "@/lib/campaign/handlers/overview";
 import { getVoice, searchVoice } from "@/lib/campaign/handlers/voice";
-import { getIdeas, generateIdeas, decideIdea } from "@/lib/campaign/handlers/ideas";
+import { getIdeas, ideasFromRun, decideIdea } from "@/lib/campaign/handlers/ideas";
 import { getAudiences, sizeAudience, saveAudience, lockAudience, audienceFromText } from "@/lib/campaign/handlers/audiences";
 import {
-  getCampaigns, getCampaign, saveBrief, transition, simulate, alertAction, investigate, getInvestigation, publishLearnings, getLearnings,
+  getCampaigns, getCampaign, saveBrief, transition, simulate, alertAction, getInvestigation, publishLearnings, getLearnings,
 } from "@/lib/campaign/handlers/campaigns";
 import { getStudio, getStudioList, generateContent, saveVariant, approveContent, planCampaign, launch } from "@/lib/campaign/handlers/studio";
-import { generateInsight } from "@/lib/campaign/handlers/insights";
 
 // ─── Campaign & CRM API ───────────────────────────────────────────────────────
 //
@@ -38,11 +37,13 @@ const GETS: Record<string, (req: NextRequest) => Promise<unknown>> = {
   learnings: () => getLearnings(),
   offers: () => getOffers(),
   settings: () => getSettings(),
-  insights: (req) => getInsight(req.nextUrl.searchParams.get("surface")),
+  findings: (req) => getFindings(req.nextUrl.searchParams.get("surface")),
 };
 
 const POSTS: Record<string, (body: unknown, user: string) => Promise<unknown>> = {
-  "ideas/generate": generateIdeas,
+  // Ideas and investigations come from the campaign agents through
+  // /api/agent/chat; the board saves an ideas run the route logged.
+  "ideas/from-run": ideasFromRun,
   "ideas/decide": decideIdea,
   "audiences/size": (body) => sizeAudience(body),
   "audiences/nl": audienceFromText,
@@ -52,7 +53,6 @@ const POSTS: Record<string, (body: unknown, user: string) => Promise<unknown>> =
   transition,
   simulate,
   "alerts/action": alertAction,
-  investigate,
   "learnings/publish": publishLearnings,
   "studio/generate": generateContent,
   "studio/variant": saveVariant,
@@ -60,7 +60,6 @@ const POSTS: Record<string, (body: unknown, user: string) => Promise<unknown>> =
   "studio/plan": planCampaign,
   "studio/launch": launch,
   settings: postSettings,
-  insights: generateInsight,
 };
 
 function fail(e: unknown, where: string) {

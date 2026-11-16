@@ -7,12 +7,9 @@ import { loadPortfolio, metricsOf, settingsMap, alertsFor, healthOf } from "../m
 import { lift, pValue } from "../stats";
 import { canTransition } from "../state";
 import { STATUSES, type Status } from "../config";
-import { runGrounded } from "../ai";
-import { INSIGHT_METHOD } from "../doctrine";
 import { toNum, isoDate } from "../format";
 
 const n = (v: unknown) => toNum(v) ?? 0;
-const r2 = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
 const ID = /^[A-Za-z0-9_-]{1,40}$/;
 
 function id(v: unknown): string {
@@ -188,94 +185,13 @@ export async function alertAction(body: unknown, user: string) {
 // hypotheses, rule some out with the evidence, and name a root cause and actions.
 // Every number it writes is checked against the evidence.
 
-const RCA_FORMAT = `{
-  'type': 'json',
-  'schema': {
-    'type': 'object',
-    'properties': {
-      'symptom': {'type': 'string'},
-      'hypotheses': {'type': 'array', 'items': {'type': 'object', 'properties': {
-        'hypothesis': {'type': 'string'}, 'verdict': {'type': 'string', 'enum': ['CONFIRMED', 'RULED_OUT', 'INCONCLUSIVE']},
-        'evidence': {'type': 'string'}}, 'required': ['hypothesis', 'verdict', 'evidence']}},
-      'root_cause': {'type': 'string'},
-      'confidence': {'type': 'string', 'enum': ['HIGH', 'MEDIUM', 'LOW']},
-      'actions': {'type': 'array', 'items': {'type': 'object', 'properties': {
-        'action': {'type': 'string'}, 'owner': {'type': 'string', 'enum': ['CRM', 'MERCHANDISING', 'SUPPLY', 'CX']},
-        'expected_effect': {'type': 'string'}}, 'required': ['action', 'owner', 'expected_effect']}},
-      'learning': {'type': 'string'},
-      'figures_cited': {'type': 'array', 'items': {'type': 'string'}}
-    },
-    'required': ['symptom', 'hypotheses', 'root_cause', 'confidence', 'actions', 'learning', 'figures_cited']
-  }
-}`;
-
-export type Rca = {
-  symptom: string; hypotheses: { hypothesis: string; verdict: string; evidence: string }[]; root_cause: string; confidence: string;
-  actions: { action: string; owner: string; expected_effect: string }[]; learning: string; figures_cited: string[];
-};
-
-export async function investigate(body: unknown, user: string) {
-  const b = (body ?? {}) as { campaignId?: string; question?: string };
-  const cid = id(b.campaignId);
-  const question = String(b.question ?? "").trim().slice(0, 400) || null;
-  const d = await getCampaign(cid);
-  const [overlap, anomalies, competitor] = await batch([
-    { sql: SQL.SQL_OVERLAP, binds: [cid, cid] }, { sql: SQL.SQL_WINDOW_ANOMALIES, binds: [cid] }, { sql: SQL.SQL_COMPETITOR_MOVE, binds: [cid] },
-  ]);
-  const m = d.metrics;
-  const pct = (v: number | null) => (v === null ? null : r2(v * 100));
-  const evidence = {
-    campaign: { id: cid, name: m.name, status: m.status, start: m.start, data_through: m.through, promoted_category: m.promotedCategory, promoted_brand: m.promotedBrand },
-    headline: {
-      treated_members: m.treated, holdout_members: m.holdout, treated_conversions: m.treatedConv,
-      treated_rate_pct: pct(m.treatedRate), holdout_rate_pct: pct(m.holdoutRate), lift_pts: r2(m.liftPp),
-      lift_ci_low_pts: r2(m.ciLowPp), lift_ci_high_pts: r2(m.ciHighPp), significant: m.significant, incremental_conversions: r2(m.incrementalConv),
-      unsubscribe_rate_pct: pct(m.unsubRate), complaint_rate_pct: pct(m.complaintRate), bounce_rate_pct: pct(m.bounceRate),
-      replies: m.replies, negative_reply_share_pct: pct(d.negReplyShare), cost_aud: r2(m.cost),
-    },
-    lift_by_dimension: d.liftBy.filter((x) => x.treated >= 100 && x.holdout >= 20).map((x) => ({
-      dimension: x.dim, value: x.value, treated: x.treated, holdout: x.holdout, treated_rate_pct: pct(x.treatedRate), holdout_rate_pct: pct(x.holdoutRate),
-      lift_pts: r2(x.liftPp), ci_low_pts: r2(x.ciLowPp), ci_high_pts: r2(x.ciHighPp), significant: x.significant })),
-    creative_ab: d.abTest ? { b_minus_a_pts: r2(d.abTest.bMinusAPp), significant: d.abTest.significant } : null,
-    stock_by_home_state: d.stock.map((x) => ({ state: x.HOME_STATE, treated: n(x.MEMBERS), home_store_short: n(x.SHORT_MEMBERS) })),
-    overlapping_campaigns_14d: overlap.map((x) => ({ campaign: x.NAME, started: isoDate(x.START_DATE), shared_members: n(x.SHARED_MEMBERS) })),
-    voice_anomalies_in_window: anomalies.map((x) => ({ week: isoDate(x.EVENT_WEEK), state: x.STATE, theme: x.THEME, negative_mentions: n(x.NEGATIVE_MENTIONS), baseline: toNum(x.BASE_MEAN), z: toNum(x.Z) })),
-    competitor_price_gap: competitor.map((x) => ({ period: x.PERIOD, avg_gap_pct: toNum(x.AVG_GAP_PCT), observations: n(x.OBSERVATIONS) })),
-    reply_themes: d.replies.map((x) => ({ sentiment: x.SENTIMENT, theme: x.THEME, replies: n(x.N) })),
-    reply_examples: d.replySamples.slice(0, 6).map((x) => ({ state: x.STATE, text: x.VOICE_TEXT, sentiment: x.SENTIMENT })),
-  };
-  const prompt = `You are the campaign investigator for Baby Mart, an Australian baby retailer. Find out why this campaign is
-performing the way it is, from the evidence below and nothing else.
-
-${INSIGHT_METHOD}
-
-Method, in order:
-1. State the symptom in one sentence, measured against the holdout.
-2. Weigh AT LEAST THREE hypotheses. Always consider: the audience (who was targeted, e.g. people who would buy anyway),
-   supply (could members buy the promoted product at their store?), price (did competitors move?), fatigue (overlapping
-   campaigns), creative or channel, and anything unusual in customer voice. For each, say CONFIRMED, RULED_OUT or
-   INCONCLUSIVE and quote the evidence. Rule out what the evidence rules out -- a voice anomaly in a state the campaign
-   barely reaches, or a price gap that did not move, is not the cause.
-3. Name the root cause. A difference whose interval spans zero is not proof.
-4. Give 2-4 actions, each with an owner.
-5. One sentence: what the next campaign should do differently.
-${question ? `\nThe manager asked: "${question.replace(/"/g, "'")}"\n` : ""}
-=== THE EVIDENCE (keys ending _pct are percentages, _pts points; amounts AUD) ===
-${JSON.stringify(evidence, null, 1)}
-
-Every number you write must come from the evidence; list each in figures_cited. Respond in JSON.`;
-  const r = await runGrounded<Rca>({
-    stage: "INVESTIGATE", campaignId: cid, templateKey: "RCA", prompt, responseFormatSql: RCA_FORMAT, user, question, figures: evidence,
-    cited: (x) => x.figures_cited ?? [],
-    prose: (x) => [x.symptom, x.root_cause, x.learning, ...x.hypotheses.map((h) => h.evidence), ...x.actions.flatMap((a) => [a.action, a.expected_effect])],
-    maxTokens: 4000,
-  });
-  return { ok: true, runId: r.runId, verified: r.verified, unmatched: r.unmatched, rca: r.result, evidence };
-}
-
+/** The latest investigation of a campaign by CAMPAIGN_INVESTIGATOR_AGENT, as the
+ *  chat route logged it (src/lib/campaign/agent-log.ts). Runs from the earlier
+ *  AI_COMPLETE investigator have a different shape and are not shown. */
 export async function getInvestigation(campaignIdRaw: string | null) {
   const cid = id(campaignIdRaw);
-  const r = await q(`SELECT * FROM ${S}.AI_RUN WHERE STAGE = 'INVESTIGATE' AND CAMPAIGN_ID = ? ORDER BY GENERATED_AT DESC LIMIT 1`, [cid]);
+  const r = await q(`SELECT RUN_ID, QUESTION, RESPONSE, IS_VERIFIED, UNVERIFIED_FIGURES, ERROR_MESSAGE, MODEL, GENERATED_BY, GENERATED_AT
+    FROM ${S}.AI_RUN WHERE STAGE = 'INVESTIGATE' AND CAMPAIGN_ID = ? AND MODEL LIKE 'agent:%' ORDER BY GENERATED_AT DESC LIMIT 1`, [cid]);
   return { latest: r[0] ?? null };
 }
 
