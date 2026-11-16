@@ -31,7 +31,7 @@ function Builder() {
   return (
     <div className="p-6">
       <PageHeader title="Campaign Builder"
-        subtitle="An agent that designs the campaign from the data: who needs what, what they said, who to leave out, and what lift to expect."
+        subtitle="Designs one campaign in full: sized audience, guardrails, offer and expected lift, and saves it as a draft when asked. For a shortlist of options, use Ideas."
         right={<Pill tone="amber"><Bot className="mr-0.5 inline h-3 w-3" />Cortex Agent · Campaign Builder</Pill>} />
       <StageStrip current={1} />
       <Card className="mb-4" title="How it works"

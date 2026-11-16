@@ -3,14 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Sparkles, Loader2, Check, X, ShieldAlert } from "lucide-react";
+import { Sparkles, Loader2, Check, X, ShieldAlert, Bot } from "lucide-react";
 import { PageHeader, Card, Loading, ErrorState, Pill, Banner, Button, Modal, Field, inputCls, Th, Td, InfoTip } from "../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../_components/useCmp";
 import { StageStrip, Verified, Prov } from "../_components/shared";
 import { AgentPanel } from "../_components/agent/AgentPanel";
 import type { IdeaBlock } from "../_components/agent/AgentCards";
 import type { Turn } from "../_components/agent/useAgentRun";
-import { INTENT_LABEL, CHANNEL_LABEL, type ChannelCode } from "@/lib/campaign/config";
+import { CHANNEL_LABEL, type ChannelCode } from "@/lib/campaign/config";
 import { num, toNum, isoDateTime } from "@/lib/campaign/format";
 
 type Signals = { due: Row[]; rfm: Row[]; supply: Row[]; intent: Row[]; brandVoice: Row[]; praise: Row[]; anomalies: Row[]; competitor: Row[]; learnings: Row[]; rejected: Row[]; nbp: Row[] };
@@ -54,10 +54,11 @@ export default function IdeasPage() {
 
   return (
     <div className="p-6">
-      <PageHeader title="Ideation" subtitle="Signals from purchases, stock, competitor prices and the customer voice, then campaign ideas grounded in exactly those signals." />
+      <PageHeader title="Ideas" subtitle="Several candidate campaigns from the signals, to accept or reject. To design one campaign in full, use the Campaign Builder."
+        right={<Link href="/campaigns/builder"><Button><Bot className="h-3.5 w-3.5" />Campaign Builder</Button></Link>} />
       <StageStrip current={1} />
 
-      <div className="mb-4 grid gap-3 lg:grid-cols-3">
+      <div className="mb-4 grid gap-3 lg:grid-cols-2">
         <Card title="Life-stage moments" subtitle="Families whose child is due for the next stage, from what they bought and when">
           <table className="w-full text-xs"><thead><tr className="border-b border-slate-200"><Th>Moving from</Th><Th>To</Th><Th align="right">Due now</Th><Th align="right">Contactable</Th></tr></thead>
             <tbody>{s.due.filter((d) => d.DUE_STATUS === "DUE_NOW").slice(0, 7).map((d, i) => (
@@ -75,17 +76,10 @@ export default function IdeasPage() {
           </ul>
           <div className="mt-1"><Prov p="MODELLED" /></div>
         </Card>
-        <Card title="What parents tell us" subtitle={<>Stated intent and recent spikes. <Link className="text-amber-700 hover:underline" href="/campaigns/voice">Explore the voice</Link></>}>
-          <ul className="space-y-1 text-xs">
-            {s.intent.map((x, i) => <li key={i}>{INTENT_LABEL[String(x.PURCHASE_INTENT)] ?? String(x.PURCHASE_INTENT)}: <b>{num(toNum(x.CUSTOMERS))}</b> parents said they will buy next</li>)}
-            {s.anomalies.map((a, i) => <li key={`a${i}`} className="text-[11px] text-red-700">{String(a.STATE)} · {String(a.THEME)}: {num(toNum(a.NEGATIVE_MENTIONS))} negative mentions (z {num(toNum(a.Z), 1)})</li>)}
-          </ul>
-          <div className="mt-1 flex gap-1"><Prov p="SYNTHETIC" /><Prov p="AI" /></div>
-        </Card>
       </div>
 
       <Card className="mb-4" title={<span className="inline-flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-amber-600" />Generate campaign ideas</span>}
-        subtitle="The Campaign Builder agent reads these signals, the voice and past learnings through its tools, then proposes ideas. Each idea's audience is counted again from the data, and guardrails are checked in code, before it reaches the board.">
+        subtitle="The agent proposes 3-5 ideas; each audience is re-counted and guardrail-checked before it reaches the board.">
         <AgentPanel agent="campaignBuilder" tag="ideas" stage="IDEATION" compact
           samples={IDEA_PROMPTS}
           placeholder="Ask for ideas, e.g. four ideas for the June long weekend, or ways to win back lapsed nappy buyers"
@@ -132,6 +126,8 @@ export default function IdeasPage() {
                   <div className="flex items-center gap-1.5 text-[10px] text-slate-400"><Verified v={i.IS_VERIFIED} /> {isoDateTime(i.CREATED_AT)}</div>
                   {["NEW", "BLOCKED"].includes(st) ? (
                     <div className="flex gap-1.5">
+                      <Link href={`/campaigns/builder?q=${encodeURIComponent(`Design this campaign in full: ${String(i.TITLE)}. ${String(i.HYPOTHESIS)} Audience: ${String(i.TARGET_DESCRIPTION)}`)}`}
+                        title="Have the Campaign Builder design it in full"><Button><Bot className="h-3.5 w-3.5" />Design</Button></Link>
                       <Button onClick={() => setDeciding({ idea: i, decision: "REJECT" })}><X className="h-3.5 w-3.5" />Reject</Button>
                       <Button variant="primary" onClick={() => setDeciding({ idea: i, decision: "ACCEPT" })}><Check className="h-3.5 w-3.5" />Accept</Button>
                     </div>

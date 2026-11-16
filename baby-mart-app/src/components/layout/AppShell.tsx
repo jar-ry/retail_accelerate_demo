@@ -10,7 +10,7 @@ import {
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
   ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
-  MessageSquareText, PenTool, BookOpen,
+  PenTool, BookOpen,
 } from "lucide-react";
 
 const categories = [
@@ -385,7 +385,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <SectionLabel>1 · Ideation</SectionLabel>
                   <NavItem href="/campaigns/builder" icon={Bot} label="Campaign Builder" color="amber" />
                   <NavItem href="/campaigns/ideas" icon={Lightbulb} label="Ideas" color="amber" />
-                  <NavItem href="/campaigns/voice" icon={MessageSquareText} label="Customer voice" color="amber" />
                   <SectionLabel>2 · Audience</SectionLabel>
                   <NavItem href="/campaigns/audiences" icon={Users} label="Audience builder" color="amber" />
                   <SectionLabel>3 · Content &amp; channels</SectionLabel>

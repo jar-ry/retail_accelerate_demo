@@ -8,27 +8,8 @@ import { MODELS } from "../config";
 import { computeFindings, SURFACES, type Surface } from "../findings";
 
 export async function getOverview() {
-  const [{ campaigns, settings, asOf }, rows] = await Promise.all([
-    loadPortfolio(),
-    batch([SQL.SQL_PIPELINE, SQL.SQL_VOICE_KPI, SQL.SQL_VOICE_ANOMALIES, SQL.SQL_LEARNINGS, SQL.SQL_VOICE_WEEKLY]),
-  ]);
-  const [pipeline, voiceKpi, anomalies, learnings, weekly] = rows;
-  // National weekly NPS, rebuilt from counts across states.
-  const byWeek = new Map<string, { r: number; p: number; d: number }>();
-  for (const w of weekly) {
-    const k = String(w.EVENT_WEEK instanceof Date ? w.EVENT_WEEK.toISOString().slice(0, 10) : w.EVENT_WEEK).slice(0, 10);
-    const x = byWeek.get(k) ?? { r: 0, p: 0, d: 0 };
-    x.r += Number(w.RESPONSES ?? 0); x.p += Number(w.PROMOTERS ?? 0); x.d += Number(w.DETRACTORS ?? 0);
-    byWeek.set(k, x);
-  }
-  const npsWeekly = [...byWeek.entries()].sort(([a], [b]) => a.localeCompare(b))
-    .map(([week, x]) => ({ week, responses: x.r, nps: x.r ? (100 * (x.p - x.d)) / x.r : null }));
-  return {
-    asOf, settings, pipeline, campaigns,
-    alerts: campaigns.flatMap((c) => c.alerts),
-    voice: voiceKpi[0] ?? {}, anomalies, npsWeekly,
-    learnings: learnings.slice(0, 6),
-  };
+  const [{ campaigns, settings, asOf }, learnings] = await Promise.all([loadPortfolio(), q(SQL.SQL_LEARNINGS)]);
+  return { asOf, settings, campaigns, alerts: campaigns.flatMap((c) => c.alerts), learnings: learnings.slice(0, 6) };
 }
 
 export async function getSettings() {

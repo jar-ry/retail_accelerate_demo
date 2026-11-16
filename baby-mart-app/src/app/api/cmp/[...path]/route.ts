@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { CmpError } from "@/lib/campaign/db";
 import { sessionUser } from "@/lib/hop/session";
 import { getOverview, getSettings, postSettings, getOffers, getFindings } from "@/lib/campaign/handlers/overview";
-import { getVoice, searchVoice } from "@/lib/campaign/handlers/voice";
 import { getIdeas, ideasFromRun, decideIdea } from "@/lib/campaign/handlers/ideas";
 import { getAudiences, sizeAudience, saveAudience, lockAudience, audienceFromText } from "@/lib/campaign/handlers/audiences";
 import {
@@ -27,8 +26,6 @@ type Ctx = { params: Promise<{ path: string[] }> | { path: string[] } };
 const GETS: Record<string, (req: NextRequest) => Promise<unknown>> = {
   overview: () => getOverview(),
   ideas: () => getIdeas(),
-  voice: (req) => getVoice(req.nextUrl.searchParams.get("state")),
-  "voice/search": (req) => searchVoice(req.nextUrl.searchParams),
   audiences: (req) => getAudiences(req.nextUrl.searchParams.get("campaign")),
   campaigns: () => getCampaigns(),
   campaign: (req) => getCampaign(req.nextUrl.searchParams.get("id")),

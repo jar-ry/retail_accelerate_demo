@@ -23,7 +23,7 @@ export const STAGE_OF: Record<Status, 1 | 2 | 3 | 4> = {
 };
 
 export const STAGES = [
-  { n: 1, key: "ideation", label: "Ideation", blurb: "Signals in the data and the voice, turned into grounded campaign ideas.", href: "/campaigns/ideas" },
+  { n: 1, key: "ideation", label: "Ideation", blurb: "Signals in purchases, stock and prices, turned into campaign ideas.", href: "/campaigns/ideas" },
   { n: 2, key: "audience", label: "Audience", blurb: "Who to target, who to leave alone, and a holdout to prove it worked.", href: "/campaigns/audiences" },
   { n: 3, key: "content", label: "Content & channels", blurb: "Copy for every channel, checked, and the channel each member gets.", href: "/campaigns/studio" },
   { n: 4, key: "performance", label: "Performance", blurb: "Lift against the holdout, live alerts, root cause and what we learned.", href: "/campaigns/performance" },
