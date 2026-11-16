@@ -31,5 +31,7 @@ profile:
 #     value: JARCHEN_AI
 #   - name: HOP_SCHEMA
 #     value: TEMP.JARCHEN_HEAD_OF_PLANNING
+#   - name: CAMPAIGN_SCHEMA
+#     value: TEMP.JARCHEN_CAMPAIGN
 #   - name: SNOWFLAKE_WAREHOUSE
 #     value: MNEGLAY_XS

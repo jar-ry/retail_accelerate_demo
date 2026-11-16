@@ -4,13 +4,13 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AudienceProvider } from "@/context/AudienceContext";
 import {
   LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck,
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
   ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
+  MessageSquareText, PenTool, BookOpen,
 } from "lucide-react";
 
 const categories = [
@@ -90,9 +90,9 @@ const PERSONAS: Record<
   campaign: {
     title: "Campaign & CRM",
     role: "Campaign Manager",
-    subtitle: "Audience & campaigns",
+    subtitle: "Ideas to measured lift",
     color: "amber",
-    home: "/campaigns/audience",
+    home: "/campaigns",
     brand: "Baby Mart",
     monogram: "BM",
   },
@@ -245,7 +245,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AudienceProvider>
         <div className="flex h-screen overflow-hidden bg-slate-50">
           <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
             <div className="p-5 border-b border-slate-200">
@@ -380,12 +379,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 <>
-                  <NavItem href="/campaigns/audience" icon={Users} label="Audience Builder" color="amber" />
-                  <SectionLabel>Activation</SectionLabel>
-                  <NavItem href="/campaigns/offers" icon={Gift} label="Offers & Budget" color="amber" />
-                  <NavItem href="/campaigns" icon={Megaphone} label="Campaigns" color="amber" />
-                  <SectionLabel>ML Models</SectionLabel>
-                  <NavItem href="/campaigns/recommendations" icon={Sparkles} label="Product Recs" color="amber" />
+                  {/* The four stages in order, each a step a campaign moves
+                      through: idea, audience, content and channels, measurement. */}
+                  <NavItem href="/campaigns" icon={LayoutDashboard} label="Overview" color="amber" />
+                  <SectionLabel>1 · Ideation</SectionLabel>
+                  <NavItem href="/campaigns/ideas" icon={Lightbulb} label="Ideas" color="amber" />
+                  <NavItem href="/campaigns/voice" icon={MessageSquareText} label="Customer voice" color="amber" />
+                  <SectionLabel>2 · Audience</SectionLabel>
+                  <NavItem href="/campaigns/audiences" icon={Users} label="Audience builder" color="amber" />
+                  <SectionLabel>3 · Content &amp; channels</SectionLabel>
+                  <NavItem href="/campaigns/studio" icon={PenTool} label="Studio" color="amber" />
+                  <NavItem href="/campaigns/offers" icon={Gift} label="Offers & channels" color="amber" />
+                  <SectionLabel>4 · Performance</SectionLabel>
+                  <NavItem href="/campaigns/performance" icon={Megaphone} label="Campaigns" color="amber" />
+                  <NavItem href="/campaigns/learnings" icon={BookOpen} label="Learnings" color="amber" />
+                  <NavItem href="/campaigns/settings" icon={Settings} label="Settings" color="amber" />
                 </>
               )}
             </nav>
@@ -397,7 +405,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
-      </AudienceProvider>
     </QueryClientProvider>
   );
 }

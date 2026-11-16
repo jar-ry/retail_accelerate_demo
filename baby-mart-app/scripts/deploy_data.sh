@@ -104,6 +104,16 @@ SCRIPTS=(
   "$APP_DIR/sql/36_hop_views.sql"                        # MFP, chain, range and governance views
   "$APP_DIR/sql/37_hop_wssi_views.sql"                   # WSSI views
   "$APP_DIR/sql/38_hop_seed_approval.sql"                # the approved baseline + post-lock edits
+  # Campaign & CRM, in its own CAMPAIGN schema. Reads CURATED (customers,
+  # purchases, stores, products, competitor prices) and the replenishment alerts,
+  # so it also runs after the base layer. 41_ builds the voice on 40_'s features,
+  # 42_ reads it with AI_COMPLETE (claude-haiku-4-5, about 2,000 texts) and keeps
+  # earlier readings, and 43_ replays the campaign history through the simulator.
+  # A re-run resets campaigns, audiences and ideas made in the app.
+  "$APP_DIR/sql/40_cmp_foundation.sql"                   # settings, features, contact, supply, campaign tables
+  "$APP_DIR/sql/41_cmp_voice.sql"                        # synthetic customer voice on real purchases
+  "$APP_DIR/sql/42_cmp_enrich.sql"                       # AI enrichment of the voice + voice views
+  "$APP_DIR/sql/43_cmp_history.sql"                      # response model, simulator, ten campaigns
 )
 
 echo "=============================================="

@@ -25,8 +25,9 @@ import sys
 
 # Original schema names. The target name is PREFIX + name, so a prefix is only
 # needed when several projects share one database (e.g. Snowhouse's TEMP).
-# HEAD_OF_PLANNING is the Head of Planning tab's own schema (sql/30-38).
-SCHEMAS = ["RAW", "CURATED", "ANALYTICS", "AI", "APP", "HEAD_OF_PLANNING"]
+# HEAD_OF_PLANNING is the Head of Planning tab's own schema (sql/30-38) and
+# CAMPAIGN the Campaign & CRM persona's (sql/40-47).
+SCHEMAS = ["RAW", "CURATED", "ANALYTICS", "AI", "APP", "HEAD_OF_PLANNING", "CAMPAIGN"]
 
 # Populated from --schema-prefix in main(); default is no prefix, which keeps the
 # canonical BABY_MART_DEMO layout intact.

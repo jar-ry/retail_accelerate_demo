@@ -199,7 +199,7 @@ export async function querySnowflake(sql: string): Promise<SnowflakeRow[]> {
 /** Execute a statement with BOUND parameters.
  *
  *  Use this for anything that writes user-supplied text. The alternative
- *  pattern in this codebase (see src/app/api/campaign) interpolates values into
+ *  pattern this codebase used (the old src/app/api/campaign) interpolates values into
  *  the SQL string with hand-rolled `.replace(/'/g, "''")` quote-doubling, and
  *  passes numerics through with no escaping at all. That is both an injection
  *  hole and a correctness bug: free-text prose containing an apostrophe --
