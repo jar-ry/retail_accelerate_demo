@@ -5,6 +5,7 @@ warehouse and role differ from the original demo account.
 
 The original scripts assume:
   - a dedicated database  BABY_MART_DEMO  with schemas RAW/CURATED/ANALYTICS/AI/APP
+    (plus HEAD_OF_PLANNING for the Head of Planning tab)
   - dedicated warehouses  DEMO_LOAD_WH / DEMO_ANALYTICS_WH / DEMO_AI_WH
   - ACCOUNTADMIN
 
@@ -24,7 +25,8 @@ import sys
 
 # Original schema names. The target name is PREFIX + name, so a prefix is only
 # needed when several projects share one database (e.g. Snowhouse's TEMP).
-SCHEMAS = ["RAW", "CURATED", "ANALYTICS", "AI", "APP"]
+# HEAD_OF_PLANNING is the Head of Planning tab's own schema (sql/30-38).
+SCHEMAS = ["RAW", "CURATED", "ANALYTICS", "AI", "APP", "HEAD_OF_PLANNING"]
 
 # Populated from --schema-prefix in main(); default is no prefix, which keeps the
 # canonical BABY_MART_DEMO layout intact.

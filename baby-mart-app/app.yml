@@ -29,5 +29,7 @@ profile:
 #     value: JARCHEN_ANALYTICS
 #   - name: BABY_MART_SCHEMA_AI
 #     value: JARCHEN_AI
+#   - name: HOP_SCHEMA
+#     value: TEMP.JARCHEN_HEAD_OF_PLANNING
 #   - name: SNOWFLAKE_WAREHOUSE
 #     value: MNEGLAY_XS

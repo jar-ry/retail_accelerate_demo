@@ -10,7 +10,7 @@ import {
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
-  ClipboardCheck, Settings, History,
+  ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
 } from "lucide-react";
 
 const categories = [
@@ -29,7 +29,7 @@ const topBrands = [
   { name: "Maxi-Cosi", slug: "Maxi-Cosi" },
 ];
 
-type Persona = "category" | "supply" | "campaign" | "planning";
+type Persona = "category" | "supply" | "campaign" | "planning" | "hop";
 
 // Persona metadata as a lookup rather than parallel ternary chains. Adding the
 // planning persona to the previous shape meant a fourth branch in each of three
@@ -78,6 +78,15 @@ const PERSONAS: Record<
     brand: "Baby Mart",
     monogram: "BM",
   },
+  hop: {
+    title: "Head of Planning",
+    role: "Head of Planning",
+    subtitle: "WSSI and MFP",
+    color: "teal",
+    home: "/hop",
+    brand: "Baby Mart",
+    monogram: "BM",
+  },
   campaign: {
     title: "Campaign & CRM",
     role: "Campaign Manager",
@@ -89,7 +98,7 @@ const PERSONAS: Record<
   },
 };
 
-const PERSONA_ORDER: Persona[] = ["category", "supply", "planning", "campaign"];
+const PERSONA_ORDER: Persona[] = ["category", "supply", "planning", "hop", "campaign"];
 
 // Route prefix -> persona, so a deep link lands on the right sidebar.
 //
@@ -99,6 +108,7 @@ const PERSONA_ORDER: Persona[] = ["category", "supply", "planning", "campaign"];
 const PERSONA_ROUTES: [string, Persona][] = [
   ["/replenishment", "supply"],
   ["/planning", "planning"],
+  ["/hop", "hop"],
   ["/campaigns", "campaign"],
 ];
 
@@ -160,6 +170,21 @@ const PERSONA_STYLES: Record<
     chevron: "text-amber-400",
     menuActive: "bg-amber-50",
   },
+  teal: {
+    navActive: "bg-teal-50 text-teal-800 border-teal-600 font-medium",
+    chip: "bg-teal-50 border-teal-200",
+    chipText: "text-teal-700",
+    chipSub: "text-teal-500",
+    chevron: "text-teal-400",
+    menuActive: "bg-teal-50",
+  },
+};
+
+// The sidebar monogram tile, per persona. Literal classes for the same reason as
+// PERSONA_STYLES.
+const MONOGRAM_TILE: Partial<Record<Persona, string>> = {
+  planning: "bg-violet-700",
+  hop: "bg-teal-700",
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -227,7 +252,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex items-center gap-3">
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                    persona === "planning" ? "bg-violet-700" : "bg-blue-700"
+                    MONOGRAM_TILE[persona] ?? "bg-blue-700"
                   }`}
                 >
                   <span className="text-white font-bold text-sm">{meta.monogram}</span>
@@ -336,6 +361,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/assessment?persona=planning" icon={ClipboardCheck} label="AI Assessment" color="violet" />
                   <NavItem href="/agent?persona=planning" icon={Bot} label="Merch Agent" color="violet" />
                   <NavItem href="/settings?persona=planning" icon={Settings} label="Settings" color="violet" />
+                </>
+              ) : persona === "hop" ? (
+                <>
+                  {/* Planning-sequence order: the store plan comes first because
+                      like-for-like is a store concept, then the product plan that
+                      has to add up to it, then the trading view, then the range. */}
+                  <NavItem href="/hop" icon={LayoutDashboard} label="Overview" color="teal" />
+                  <SectionLabel>Plan</SectionLabel>
+                  <NavItem href="/hop/store-plan" icon={Store} label="Store plan" color="teal" />
+                  <NavItem href="/hop/mfp" icon={Layers} label="MFP" color="teal" />
+                  <NavItem href="/hop/wssi" icon={CalendarRange} label="WSSI" color="teal" />
+                  <NavItem href="/hop/tpr" icon={Filter} label="Range review (TPR)" color="teal" />
+                  <SectionLabel>Govern</SectionLabel>
+                  <NavItem href="/hop/approve" icon={Lock} label="Approve & lock" color="teal" />
+                  <NavItem href="/hop/ownership" icon={ShieldCheck} label="Ownership" color="teal" />
+                  <NavItem href="/hop/settings" icon={Settings} label="Settings" color="teal" />
                 </>
               ) : (
                 <>

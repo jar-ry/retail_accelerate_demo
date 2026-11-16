@@ -20,6 +20,10 @@ ARCHITECTURE.md
 DEMO_SCRIPT.md
 .snowflake/cortex/plans/*
 
+# Reference implementation the Head of Planning tab was rebuilt from. A local
+# checkout with its own git history, kept for comparison only.
+anko_mfp-main copy/
+
 # Snowflake logs
 snowflake.log
 

@@ -27,6 +27,7 @@ interface SnowflakeRow {
 //                        BABY_MART_SCHEMA_CURATED=JARCHEN_CURATED,
 //                        BABY_MART_SCHEMA_ANALYTICS=JARCHEN_ANALYTICS,
 //                        BABY_MART_SCHEMA_AI=JARCHEN_AI,
+//                        HOP_SCHEMA=TEMP.JARCHEN_HEAD_OF_PLANNING (see hop/schema.ts),
 //                        SNOWFLAKE_WAREHOUSE=MNEGLAY_XS
 export const DB = process.env.BABY_MART_DATABASE || "BABY_MART_DEMO";
 export const SCHEMA_CURATED = process.env.BABY_MART_SCHEMA_CURATED || "CURATED";
@@ -256,6 +257,65 @@ export function toIsoDateTime(v: unknown): string | null {
   if (/^\d{4}-\d{2}-\d{2}[ T]/.test(s)) return s.slice(0, 19).replace("T", " ");
   const d = new Date(s);
   return isNaN(d.getTime()) ? s : d.toISOString().slice(0, 19).replace("T", " ");
+}
+
+/** Run several statements on ONE connection, concurrently, with optional binds.
+ *
+ *  A page that needs six queries otherwise opens six connections, each paying
+ *  the login round trip. The driver multiplexes statements over a session, so
+ *  they still run in parallel. Results come back in input order; the first
+ *  failure rejects the batch. For reads: writes that must land together go
+ *  through queryTransaction. */
+export async function queryBatch(
+  statements: { sql: string; binds?: unknown[] }[],
+): Promise<SnowflakeRow[][]> {
+  const conn = await openConnection();
+  try {
+    return await Promise.all(statements.map((s) => runOn(conn, s.sql, s.binds)));
+  } finally {
+    conn.destroy(() => {});
+  }
+}
+
+/** Run writes as ONE transaction: in order, on one connection, all or nothing.
+ *
+ *  queryBatch is wrong for writes that belong together -- a change and its audit
+ *  row -- because its statements run concurrently and each commits on its own:
+ *  one can fail while the other lands, and a statement cannot rely on seeing an
+ *  earlier one's effect. Here `work` runs its statements one after another
+ *  inside BEGIN ... COMMIT, so a later one can read what an earlier one wrote,
+ *  and anything thrown -- a failed statement or a check in `work` -- rolls the
+ *  lot back. */
+export async function queryTransaction<T>(
+  work: (run: (sql: string, binds?: unknown[]) => Promise<SnowflakeRow[]>) => Promise<T>,
+): Promise<T> {
+  const conn = await openConnection();
+  const run = (sql: string, binds?: unknown[]) => runOn(conn, sql, binds);
+  try {
+    // Spelled out: a bare BEGIN also opens a Snowflake Scripting block.
+    await run("BEGIN TRANSACTION");
+    const out = await work(run);
+    await run("COMMIT");
+    return out;
+  } catch (e) {
+    // A failed statement leaves the transaction open; close it before the
+    // connection goes. The original error is the one worth reporting.
+    await run("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    conn.destroy(() => {});
+  }
+}
+
+function runOn(conn: snowflake.Connection, sql: string, binds?: unknown[]): Promise<SnowflakeRow[]> {
+  return new Promise((resolve, reject) => {
+    conn.execute({
+      sqlText: remapNamespace(sql),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(binds ? { binds: binds as any } : {}),
+      complete: (err, _stmt, rows) => (err ? reject(err) : resolve((rows as SnowflakeRow[]) || [])),
+    });
+  });
 }
 
 export async function executeMultiple(sqls: string[]): Promise<SnowflakeRow[][]> {

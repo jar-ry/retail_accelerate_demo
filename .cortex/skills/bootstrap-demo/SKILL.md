@@ -71,6 +71,17 @@ If missing, run:
 snow sql -f native_app/sql/03_create_semantic_view.sql --connection <CONNECTION>
 ```
 
+### Step 4b: Create the Head of Planning Model
+
+The Head of Planning persona (WSSI and MFP) reads its own schema, `BABY_MART_DEMO.HEAD_OF_PLANNING`, built by `baby-mart-app/sql/30-38` in order. Run them with `run_sql.py`, not `snow sql -f`: the CLI's template substitution misparses literals in these scripts. They read the curated facts, the supplier forecast (`sql/03`) and the Global Planning hierarchy and option range (`sql/10`, `sql/18`), so those must exist first; `scripts/deploy_data.sh` runs everything, these included, in dependency order.
+```bash
+cd baby-mart-app
+for f in sql/3[0-8]_hop_*.sql; do SNOWFLAKE_CONNECTION_NAME=<CONNECTION> python scripts/run_sql.py "$f" || break; done
+SNOWFLAKE_CONNECTION_NAME=<CONNECTION> python scripts/verify_hop.py   # every gate should pass
+```
+
+Re-running the scripts resets the tab to its seed: edits, sandboxes and AI insights made in the app are lost.
+
 ### Step 5: Deploy the Cortex Agent
 
 ```bash
@@ -105,7 +116,8 @@ Open the app URL and check:
 2. Click a **brand** → SKU Performance page loads
 3. Switch to **Supply Chain Planner** → Replenishment dashboard loads
 4. Switch to **Campaign Manager** → Audience Builder loads
-5. **Agent page** → Ask "What is the top brand by revenue?" → gets a response
+5. Switch to **Head of Planning** → Overview shows the planning chain; Store plan, MFP and WSSI load
+6. **Agent page** → Ask "What is the top brand by revenue?" → gets a response
 
 ## Troubleshooting
 
@@ -131,5 +143,5 @@ App Runtime upgrades in-place — URL stays the same.
 A fully working demo with:
 - Live web app at a Snowflake-managed URL
 - Cortex Agent answering natural language questions
-- 3 personas: Category Manager, Supply Chain Planner, Campaign Manager
+- 5 personas: Category Manager, Supply Chain Planner, Global Planning, Head of Planning, Campaign Manager
 - All data in `BABY_MART_DEMO` database

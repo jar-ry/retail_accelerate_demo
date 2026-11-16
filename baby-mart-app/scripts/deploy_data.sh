@@ -88,6 +88,22 @@ SCRIPTS=(
   # DT_* aggregates, so it must follow both.
   "$APP_DIR/sql/15_assessment_settings.sql"              # ASSESSMENT_TEMPLATE + history + runs
   "$APP_DIR/sql/16_assessment_procedure.sql"             # GENERATE_AI_ASSESSMENT
+  # Head of Planning (WSSI and MFP), in its own HEAD_OF_PLANNING schema. 30_
+  # reads the CURATED facts and the 10_ hierarchy, 32_ the 18_ option range and
+  # 36_ the 03_ supplier forecast, so the block runs last. Within it the order is
+  # strict: the 33_ budget is phased off the 31_ store plan and the 32_ MFP, the
+  # 36_/37_ views read 30_-35_, and 38_ seeds the board approval those views
+  # report against. 30_-35_ CREATE OR REPLACE their tables, so a re-run resets
+  # the tab to its seed: edits, sandboxes and AI insights made in the app go.
+  "$APP_DIR/sql/30_hop_foundation.sql"                   # schema, calendar, stores, store plan inputs
+  "$APP_DIR/sql/31_hop_views_core.sql"                   # VW_STORE_PLAN_WEEKLY + calendar views
+  "$APP_DIR/sql/32_hop_mfp.sql"                          # FACT_MFP_PRODUCT_PLAN + RBU mix + range inputs
+  "$APP_DIR/sql/33_hop_wssi_fact.sql"                    # FACT_WSSI_WEEKLY
+  "$APP_DIR/sql/34_hop_wssi_spec.sql"                    # the 140-row WSSI layout + planner inputs
+  "$APP_DIR/sql/35_hop_governance.sql"                   # ownership, audit, approval, scenarios, AI
+  "$APP_DIR/sql/36_hop_views.sql"                        # MFP, chain, range and governance views
+  "$APP_DIR/sql/37_hop_wssi_views.sql"                   # WSSI views
+  "$APP_DIR/sql/38_hop_seed_approval.sql"                # the approved baseline + post-lock edits
 )
 
 echo "=============================================="

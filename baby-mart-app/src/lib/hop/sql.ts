@@ -1,0 +1,685 @@
+// ─── Head of Planning: the reads behind every page, in one place ─────────────
+//
+// Every page loads from these, reading the views in HEAD_OF_PLANNING (sql/30-38).
+// Writes, and the one-row lookups that validate them, sit with the handler that
+// owns them in ./handlers. Rules the views guarantee and these queries rely on:
+//   - Rates are rebuilt as SUM(num) / SUM(den), never averaged.
+//   - Balances (stock, commitments) are taken at a period's closing week, never
+//     summed across weeks.
+//   - LY is real POS, re-dated onto this year's weeks in the WSSI views.
+//   - FY27 H1 is July to December 2026. Never a bare "FY27".
+//
+// Each query is an `export const SQL_* = \`...\`` so scripts/verify_hop.py can
+// run every one of them exactly as written. Bound queries take `?` placeholders;
+// BINDS below gives the gate a representative value for each.
+
+import { S } from "./schema";
+
+/** Representative binds for the verification gate. */
+export const BINDS: Record<string, unknown[]> = {
+  SQL_SCENARIO_WEEKS: [1],
+  SQL_SCENARIO_EVENTS: [1],
+  SQL_SCENARIO_TARGETS: [1],
+  SQL_SCENARIO_PERIODS: [1],
+  SQL_STORE_COMMENTS: [1],
+  SQL_ASSIST_TOTALS: ["S010"],
+  SQL_SURFACE_OWNERSHIP: ["WSSI"],
+  SQL_WSSI_GRAIN: ["MONTH", "ALL"],
+  SQL_WSSI_PINS: ["MONTH", "ALL"],
+};
+
+/** Queries legitimately empty in a healthy state: the baseline has no sandbox
+ *  cells, and nothing has been uploaded to or edited in the MFP yet. */
+export const EXPECTED_EMPTY = [
+  "SQL_SCENARIO_WEEKS",
+  "SQL_SCENARIO_EVENTS",
+  "SQL_SCENARIO_TARGETS",
+  "SQL_SCENARIO_PERIODS",
+  "SQL_STORE_COMMENTS",
+  "SQL_MFP_UPLOADS",
+  "SQL_MFP_HISTORY",
+  "SQL_WSSI_PINS",
+  "SQL_MODEL_USAGE",
+  "SQL_INSIGHT_LATEST_RUNS",
+];
+
+// ─── Overview ────────────────────────────────────────────────────────────────
+
+/** Headline figures.
+ *
+ *  Margin naming matters and is easy to get wrong. The store plan's margin is a
+ *  POS margin: sales less landed cost after discount, the same basis as the till.
+ *  FIRST margin is struck at intake, at full retail, and lives in the MFP. They
+ *  are different numbers and are reported separately, never conflated. */
+export const SQL_KPI = `
+WITH sp AS (
+  SELECT SUM(LY_SALES_AUD) AS LY, SUM(PLAN_SALES_AUD) AS PLAN, SUM(PLAN_MARGIN_AUD) AS MARGIN,
+         SUM(IFF(IS_LFL_UNIVERSE, PLAN_SALES_AUD, 0)) AS LFL, SUM(IFF(IS_LFL_UNIVERSE, LY_SALES_AUD, 0)) AS LFL_LY,
+         SUM(IFF(NOT IS_LFL_UNIVERSE, PLAN_SALES_AUD, 0)) AS NEW_SALES,
+         COUNT(DISTINCT STORE_CODE) AS STORES, COUNT(DISTINCT IFF(NOT IS_LFL_UNIVERSE, STORE_CODE, NULL)) AS NEW_STORES
+  FROM ${S}.VW_STORE_PLAN_WEEKLY
+), td AS (
+  -- This year to date against the same weeks of last year, budget and forecast.
+  SELECT SUM(IFF(VERSION = 'TY', SLS_AUD, 0)) AS TY, SUM(IFF(VERSION = 'LY', SLS_AUD_TD, 0)) AS LY,
+         SUM(IFF(VERSION = 'BUD', SLS_AUD_TD, 0)) AS BUD, SUM(IFF(VERSION = 'MERCH_FC', SLS_AUD_TD, 0)) AS FC,
+         SUM(IFF(VERSION = 'TY', POS_GP_AUD, 0)) AS TY_GP, MAX(LAST_ACTUAL_WEEK) AS AS_AT,
+         MIN(IFF(VERSION = 'TY', PERIOD_START_DATE, NULL)) AS TD_FROM
+  FROM ${S}.VW_WSSI_GRAIN WHERE TIME_GRAIN = 'HALF' AND RBU_SCOPE = 'ALL' AND PERIOD_KEY = 'H:FY26H2'
+), half AS (
+  SELECT SUM(IFF(VERSION = 'LE', SLS_AUD, 0)) AS LE, SUM(IFF(VERSION = 'BUD', SLS_AUD, 0)) AS BUD,
+         SUM(IFF(VERSION = 'MERCH_FC', SLS_AUD, 0)) AS FC
+  FROM ${S}.VW_WSSI_GRAIN WHERE TIME_GRAIN = 'HALF' AND RBU_SCOPE = 'ALL' AND PERIOD_KEY = 'H:FY27H1'
+), mfp AS (
+  SELECT SUM(TPR_BUDGET) AS BU, DIV0(SUM(F27_FIRST_MARGIN_PCT * TPR_BUDGET), SUM(TPR_BUDGET)) AS FIRST_MARGIN,
+         SUM(SALES_AT_RISK_AUD) AS AT_RISK
+  FROM ${S}.VW_MFP_IDENTITY WHERE PLAN_LEVEL = 'DEPARTMENT'
+), appr AS (
+  SELECT APPROVAL_ID, APPROVED_AT, APPROVED_BY, TOTAL_SALES_AUD, TOTAL_MARGIN_AUD
+  FROM ${S}.PLAN_APPROVAL WHERE STATE = 'APPROVED' QUALIFY ROW_NUMBER() OVER (ORDER BY APPROVAL_ID DESC) = 1
+)
+SELECT sp.LY AS LY_BASE_AUD, sp.PLAN AS PLAN_TOTAL_AUD, sp.MARGIN AS PLAN_MARGIN_AUD,
+       sp.LFL AS LFL_AUD, sp.LFL_LY AS LFL_LY_AUD, sp.NEW_SALES AS NEW_STORE_AUD,
+       sp.STORES, sp.NEW_STORES,
+       td.TY AS TY_TD_AUD, td.LY AS LY_TD_AUD, td.BUD AS BUD_TD_AUD, td.FC AS FC_TD_AUD,
+       DIV0(td.TY_GP, td.TY) AS EXIT_MARGIN_PCT_ACTUAL, td.AS_AT AS ACTUALS_AS_AT, td.TD_FROM,
+       half.LE AS LE_H1_AUD, half.BUD AS BUD_H1_AUD, half.FC AS FC_H1_AUD,
+       mfp.BU AS MFP_BOTTOM_UP_AUD, mfp.FIRST_MARGIN AS PLAN_FIRST_MARGIN_PCT, mfp.AT_RISK AS SALES_AT_RISK_AUD,
+       appr.APPROVAL_ID, appr.APPROVED_AT, appr.APPROVED_BY, appr.TOTAL_SALES_AUD AS APPROVED_SALES_AUD,
+       appr.TOTAL_MARGIN_AUD AS APPROVED_MARGIN_AUD,
+       (SELECT MAX(CHANGED_AT) FROM ${S}.PLAN_CELL_OVERRIDE) AS LAST_EDIT_AT,
+       -- Driver cells a planner can type into: margin for every trading store-month,
+       -- LFL only where there is a comparable base. Counted, not asserted.
+       (SELECT COUNT(*) FROM ${S}.STORE_PLAN_DRIVER) * 2
+         + (SELECT COUNT(*) FROM ${S}.STORE_PLAN_NEW_STORE_MARGIN) AS DRIVER_CELLS
+FROM sp, td, half, mfp
+LEFT JOIN appr ON TRUE
+`;
+
+/** What is unresolved, what has moved, and what is waiting on a decision. */
+export const SQL_ATTENTION = `
+SELECT 'NON_COMPLIANT_EDIT' AS KIND, COUNT(*) AS N, 'HIGH' AS SEVERITY,
+       'Plan edits that fail the rationale or escalation rule' AS DESCRIPTION, '/hop/approve' AS HREF
+FROM ${S}.VW_OVERRIDE_COMPLIANCE WHERE COMPLIANCE_STATUS <> 'COMPLIANT'
+UNION ALL
+SELECT 'GROWTH_BREAK', COUNT(*), 'HIGH',
+       'Departments whose committed range does not deliver the growth stated for it (gap of '
+         || (SELECT SETTING_VALUE FROM ${S}.PLANNING_SETTING WHERE SETTING_KEY = 'MATERIALITY_PTS') || '+ points)',
+       '/hop/mfp'
+FROM ${S}.VW_MFP_IDENTITY
+WHERE PLAN_LEVEL = 'DEPARTMENT'
+  AND ABS(GROWTH_BREAK_PTS) * 100 >= (SELECT TRY_TO_NUMBER(SETTING_VALUE) FROM ${S}.PLANNING_SETTING WHERE SETTING_KEY = 'MATERIALITY_PTS')
+UNION ALL
+SELECT 'MFP_SHORTFALL', COUNT(*), 'HIGH',
+       'RBUs whose product plan falls short of their share of the store plan', '/hop/mfp'
+FROM ${S}.VW_PLANNING_CHAIN WHERE HOP = 3 AND VARIANCE_AUD < -0.005 * PARENT_VALUE_AUD
+UNION ALL
+SELECT 'BELOW_CREDIBLE_OFFER', COUNT(*), 'MEDIUM',
+       'Departments committing less of the presented range than a credible offer needs', '/hop/tpr'
+FROM ${S}.VW_RANGE_CREDIBILITY WHERE CREDIBILITY_STATUS = 'BELOW CREDIBLE OFFER'
+UNION ALL
+SELECT 'EDIT_SINCE_APPROVAL', COUNT(*), 'MEDIUM',
+       'Plan edits made since the baseline was approved', '/hop/approve'
+FROM ${S}.PLAN_CELL_OVERRIDE o
+WHERE o.CHANGED_AT > (SELECT NVL(MAX(APPROVED_AT), '1900-01-01'::TIMESTAMP_NTZ) FROM ${S}.PLAN_APPROVAL WHERE STATE = 'APPROVED')
+UNION ALL
+SELECT 'AWAITING_DECISION', COUNT(*), 'MEDIUM',
+       'Design decisions recorded as waiting on the business', '/hop/approve'
+FROM ${S}.DESIGN_DECISION WHERE STATUS = 'AWAITING_CUSTOMER'
+UNION ALL
+SELECT 'NEEDS_DECISION', COUNT(*), 'MEDIUM',
+       'Data quality findings that need a decision', '/hop/approve'
+FROM ${S}.DATA_QUALITY_FINDING WHERE NEEDS_CUSTOMER_DECISION
+UNION ALL
+SELECT 'UNCONFIRMED_OWNER', COUNT(*), 'LOW',
+       'Measure owners inferred, not yet confirmed by Planning and Buying', '/hop/ownership'
+FROM ${S}.MEASURE_OWNERSHIP WHERE IS_INFERRED AND CONFIRMED_BY IS NULL
+UNION ALL
+SELECT 'OPEN_ASSUMPTION', COUNT(*), 'LOW',
+       'Planning settings that are judgement, not data', '/hop/settings'
+FROM ${S}.PLANNING_SETTING WHERE IS_ASSUMPTION
+UNION ALL
+SELECT 'WSSI_AWAITING', COUNT(*), 'LOW',
+       'WSSI rows waiting on a feed that has never been supplied', '/hop/wssi'
+FROM ${S}.WSSI_ROW_MEASURE_MAP WHERE ROW_KIND = 'AWAITING'
+UNION ALL
+SELECT 'WSSI_INTEGRITY', COUNT(DISTINCT CHECK_NAME || DEPARTMENT_NAME), 'LOW',
+       'WSSI self-checks failing (the SOH feed against modelled stock)', '/hop/wssi'
+FROM ${S}.VW_WSSI_INTEGRITY
+ORDER BY IFF(SEVERITY = 'HIGH', 0, IFF(SEVERITY = 'MEDIUM', 1, 2)), N DESC
+`;
+
+/** Actuals against budget and forecast by month, with part-traded months compared
+ *  like for like: the actual weeks against the SAME weeks of the plan. A part
+ *  month against a full-month budget is not a variance. */
+export const SQL_TRACKING = `
+SELECT TIME_GRAIN, PERIOD_KEY, SORT_KEY, PERIOD_LABEL, CAL_LABEL, FY_YEAR, FY_HALF, MONTH_NAME,
+       PERIOD_STATE, MAX(EXPECTED_WEEKS) AS EXPECTED_WEEKS,
+       MAX(IFF(VERSION = 'TY', SLS_AUD, NULL))            AS ACTUAL_AUD,
+       MAX(IFF(VERSION = 'TY', AVAILABLE_WEEKS, NULL))    AS ACTUAL_WEEKS,
+       MAX(IFF(VERSION = 'BUD', SLS_AUD, NULL))           AS BUDGET_AUD,
+       MAX(IFF(VERSION = 'BUD', SLS_AUD_TD, NULL))        AS BUDGET_TD_AUD,
+       MAX(IFF(VERSION = 'MERCH_FC', SLS_AUD, NULL))      AS FORECAST_AUD,
+       MAX(IFF(VERSION = 'MERCH_FC', SLS_AUD_TD, NULL))   AS FORECAST_TD_AUD,
+       MAX(IFF(VERSION = 'LY', SLS_AUD, NULL))            AS LY_AUD,
+       MAX(IFF(VERSION = 'LY', SLS_AUD_TD, NULL))         AS LY_TD_AUD,
+       MAX(IFF(VERSION = 'LE', SLS_AUD, NULL))            AS LE_AUD,
+       MAX(IFF(VERSION = 'TY', POS_GP_AUD, NULL))         AS ACTUAL_GP_AUD,
+       MAX(IFF(VERSION = 'BUD', POS_GP_AUD, NULL))        AS BUDGET_GP_AUD
+FROM ${S}.VW_WSSI_GRAIN
+WHERE RBU_SCOPE = 'ALL' AND TIME_GRAIN IN ('MONTH', 'HALF')
+GROUP BY TIME_GRAIN, PERIOD_KEY, SORT_KEY, PERIOD_LABEL, CAL_LABEL, FY_YEAR, FY_HALF, MONTH_NAME, PERIOD_STATE
+ORDER BY IFF(TIME_GRAIN = 'MONTH', 0, 1), SORT_KEY
+`;
+
+// ─── Store plan ──────────────────────────────────────────────────────────────
+
+/** One row per store-week: the grid builds every grain from these, so a month,
+ *  quarter or half is always the sum of its weeks and its rates are rebuilt from
+ *  components. The scenario path substitutes a sandbox for the live view. */
+export const SQL_STORE_PLAN_WEEKS = `
+SELECT STORE_CODE, WEEK_SLOT, WEEK_END_DATE, FY_PERIOD_NO, MONTH_NAME, WEEK_IN_MONTH, PERIOD_KEY,
+       PLAN_METHOD, LY_SALES_AUD, PLAN_SALES_AUD, PLAN_MARGIN_AUD, LFL_PCT, MARGIN_PCT,
+       IS_HALO_WEEK, IS_LFL_UNIVERSE, IS_WEEK_OVERRIDDEN
+FROM ${S}.VW_STORE_PLAN_WEEKLY
+ORDER BY STORE_CODE, WEEK_SLOT
+`;
+
+/** Store master with the drivers behind each month. */
+export const SQL_STORE_MASTER = `
+SELECT d.STORE_CODE, d.STORE_NAME, d.STATE, d.REGION, d.STORE_FORMAT, d.OPENING_DATE, d.IS_NEW_STORE,
+       d.BENCHMARK_STORE_CODE, b.STORE_NAME AS BENCHMARK_STORE_NAME, d.BENCHMARK_PCT,
+       d.MIX_SOURCE_STORE_CODE, mx.STORE_NAME AS MIX_SOURCE_STORE_NAME, d.HALO_WEEKS, d.SELLING_AREA_SQM,
+       d.STORE_STATUS, d.NOTE
+FROM ${S}.DIM_STORE d
+LEFT JOIN ${S}.DIM_STORE b  ON b.STORE_CODE = d.BENCHMARK_STORE_CODE
+LEFT JOIN ${S}.DIM_STORE mx ON mx.STORE_CODE = d.MIX_SOURCE_STORE_CODE
+ORDER BY d.IS_NEW_STORE, d.STORE_CODE
+`;
+
+/** The monthly drivers, comparable and new, with when each was last changed. */
+export const SQL_STORE_DRIVERS = `
+SELECT STORE_CODE, MONTH_NAME, 'COMPARABLE' AS KIND, LFL_PCT, MARGIN_PCT, NULL::FLOAT AS MONTHLY_SALES_AUD,
+       NULL::BOOLEAN AS IS_DERIVED, NULL::VARCHAR AS DERIVATION, RATIONALE, REASON_CODE,
+       GREATEST(LFL_CHANGED_AT, MARGIN_CHANGED_AT) AS CHANGED_AT
+FROM ${S}.STORE_PLAN_DRIVER
+UNION ALL
+SELECT n.STORE_CODE, n.MONTH_NAME, 'NEW_STORE', NULL, m.MARGIN_PCT, n.MONTHLY_SALES_AUD,
+       n.IS_DERIVED, n.DERIVATION, NULL, NULL, GREATEST(n.CHANGED_AT, NVL(m.CHANGED_AT, n.CHANGED_AT))
+FROM ${S}.STORE_PLAN_NEW_STORE n
+LEFT JOIN ${S}.STORE_PLAN_NEW_STORE_MARGIN m
+  ON m.STORE_CODE = n.STORE_CODE AND m.MONTH_NAME = n.MONTH_NAME AND m.FY_YEAR = n.FY_YEAR
+`;
+
+/** Reconciliation of the store plan to independently re-derived figures. */
+export const SQL_STORE_PLAN_RECON = `
+SELECT LINE, MODEL_AUD, SOURCE_STATED_AUD, VARIANCE_AUD, EXPLANATION, DEFECT
+FROM ${S}.VW_STORE_PLAN_RECON
+`;
+
+/** Reason codes for the edit dialogs. */
+export const SQL_REASON_CODES = `
+SELECT REASON_CODE, REASON_NAME, APPLIES_TO, REQUIRES_NARRATIVE
+FROM ${S}.PLAN_REASON_CODE
+WHERE REASON_CODE NOT IN ('NOT_SUPPLIED', 'MIGRATED_COMMENT', 'REVERTED')
+ORDER BY REASON_NAME
+`;
+
+/** Every recorded change to the store plan, newest first. Rows from the initial
+ *  spreadsheet migration are flagged so they are not read as somebody's edit. */
+export const SQL_STORE_PLAN_HISTORY = `
+SELECT o.OVERRIDE_ID, o.PLAN_KIND, o.ENTITY_CODE, o.MONTH_NAME, o.MEASURE_CODE, o.OLD_VALUE, o.NEW_VALUE,
+       o.REASON_CODE, o.RATIONALE, o.CHANGED_BY, o.CHANGED_AT, o.SURFACE, o.EDIT_CLASS, o.OWNING_PARTY,
+       o.ON_BEHALF_OF, o.IS_POST_LOCK_AMENDMENT, o.ESCALATION_NOTE, o.APPROVAL_ID,
+       c.COMPLIANCE_STATUS, (o.CHANGED_BY = 'migrated-from-spreadsheet') AS IS_MIGRATION
+FROM ${S}.PLAN_CELL_OVERRIDE o
+LEFT JOIN ${S}.VW_OVERRIDE_COMPLIANCE c ON c.OVERRIDE_ID = o.OVERRIDE_ID
+WHERE o.PLAN_KIND LIKE 'STORE_PLAN%'
+ORDER BY o.CHANGED_AT DESC, o.OVERRIDE_ID DESC
+`;
+
+/** The latest approval, so the grid can say what is locked. */
+export const SQL_LATEST_APPROVAL = `
+SELECT APPROVAL_ID, STATE, APPROVED_BY, APPROVED_AT, BOARD_MEETING_DATE, TOTAL_SALES_AUD, TOTAL_MARGIN_AUD
+FROM ${S}.PLAN_APPROVAL WHERE STATE = 'APPROVED'
+QUALIFY ROW_NUMBER() OVER (ORDER BY APPROVAL_ID DESC) = 1
+`;
+
+/** Variance to the approved baseline by store, for the grid's change markers. */
+export const SQL_STORE_VARIANCE = `
+SELECT STORE_CODE, MONTH_NAME, MAX(BASELINE_STATUS) AS BASELINE_STATUS,
+       SUM(APPROVED_SALES_AUD) AS APPROVED_SALES_AUD, SUM(CURRENT_SALES_AUD) AS CURRENT_SALES_AUD,
+       SUM(SALES_VARIANCE_AUD) AS SALES_VARIANCE_AUD, SUM(MARGIN_VARIANCE_AUD) AS MARGIN_VARIANCE_AUD
+FROM ${S}.VW_VARIANCE_TO_APPROVED
+GROUP BY STORE_CODE, MONTH_NAME
+HAVING ABS(NVL(SUM(SALES_VARIANCE_AUD), 1)) > 0.005 OR ABS(NVL(SUM(MARGIN_VARIANCE_AUD), 1)) > 0.005
+`;
+
+// ─── Store plan sandboxes ────────────────────────────────────────────────────
+
+/** Scenarios: the live baseline and any sandboxes. */
+export const SQL_SCENARIOS = `
+SELECT s.SCENARIO_ID, s.SCENARIO_CODE, s.SCENARIO_NAME, s.SCENARIO_KIND, s.STATUS, s.BASE_SCENARIO_ID,
+       s.CURRENT_REVISION, s.CREATED_BY, s.CREATED_AT, s.UPDATED_AT,
+       (SELECT COUNT(*) FROM ${S}.STORE_PLAN_SCENARIO_CELL c WHERE c.SCENARIO_ID = s.SCENARIO_ID AND c.BATCH <> 'SCENARIO_SNAPSHOT') AS EDITS,
+       (SELECT COUNT(*) FROM ${S}.STORE_PLAN_EVENT e WHERE e.SCENARIO_ID = s.SCENARIO_ID AND e.STATUS = 'ACTIVE') AS EVENTS
+FROM ${S}.PLAN_SCENARIO s
+WHERE s.STATUS <> 'ARCHIVED'
+ORDER BY IFF(s.SCENARIO_KIND = 'BASELINE', 0, 1), s.UPDATED_AT DESC
+`;
+
+/** A sandbox's store-weeks, in the same shape as VW_STORE_PLAN_WEEKLY.
+ *
+ *  A sandbox is a COPY of the live drivers taken when it was created: every
+ *  store-week's LFL and margin, and a new store's sales. Reading the copy, not the
+ *  live driver underneath it, is what stops a live edit made afterwards from
+ *  leaking into a scenario someone is still working on -- the reference read the
+ *  live driver wherever the sandbox had no cell of its own. Events then scale
+ *  sales: a closure zeroes the week, a capacity event multiplies it, and where
+ *  events overlap the lowest factor wins. */
+export const SQL_SCENARIO_WEEKS = `
+WITH p AS (SELECT ?::NUMBER AS SCENARIO_ID),
+latest AS (
+  SELECT c.STORE_CODE, c.WEEK_END_DATE, c.MEASURE_CODE, c.VALUE
+  FROM ${S}.STORE_PLAN_SCENARIO_CELL c JOIN p ON c.SCENARIO_ID = p.SCENARIO_ID
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY c.STORE_CODE, c.WEEK_END_DATE, c.MEASURE_CODE
+                             ORDER BY c.CHANGED_AT DESC, c.CELL_ID DESC) = 1
+), cells AS (
+  SELECT STORE_CODE, WEEK_END_DATE,
+         MAX(IFF(MEASURE_CODE = 'LFL_PCT', VALUE, NULL))    AS LFL_PCT,
+         MAX(IFF(MEASURE_CODE = 'MARGIN_PCT', VALUE, NULL)) AS MARGIN_PCT,
+         MAX(IFF(MEASURE_CODE = 'SALES_AUD', VALUE, NULL))  AS SALES_AUD
+  FROM latest GROUP BY STORE_CODE, WEEK_END_DATE
+), ev AS (
+  SELECT e.STORE_CODE, w.TY_WEEK_END_DATE AS WEEK_END_DATE,
+         MIN(IFF(e.ADJUSTMENT_METHOD = 'ZERO', 0, e.ADJUSTMENT_VALUE)) AS SALES_FACTOR,
+         LISTAGG(DISTINCT e.EVENT_TYPE, ', ') AS EVENTS
+  FROM ${S}.STORE_PLAN_EVENT e
+  JOIN p ON e.SCENARIO_ID = p.SCENARIO_ID
+  JOIN ${S}.STORE_PLAN_WEEK_SLOT w ON w.TY_WEEK_END_DATE BETWEEN e.START_DATE AND DATEADD(day, 6, e.END_DATE)
+  WHERE e.STATUS = 'ACTIVE'
+  GROUP BY e.STORE_CODE, w.TY_WEEK_END_DATE
+)
+SELECT w.STORE_CODE, w.WEEK_SLOT, w.WEEK_END_DATE, w.FY_PERIOD_NO, w.MONTH_NAME, w.WEEK_IN_MONTH, w.PERIOD_KEY,
+       w.PLAN_METHOD, w.LY_SALES_AUD,
+       IFF(w.IS_LFL_UNIVERSE, w.LY_SALES_AUD * (1 + c.LFL_PCT), c.SALES_AUD) * NVL(ev.SALES_FACTOR, 1) AS PLAN_SALES_AUD,
+       IFF(w.IS_LFL_UNIVERSE, w.LY_SALES_AUD * (1 + c.LFL_PCT), c.SALES_AUD) * NVL(ev.SALES_FACTOR, 1) * c.MARGIN_PCT AS PLAN_MARGIN_AUD,
+       IFF(w.IS_LFL_UNIVERSE, c.LFL_PCT, NULL) AS LFL_PCT, c.MARGIN_PCT, c.SALES_AUD AS BASE_SALES_AUD,
+       w.IS_HALO_WEEK, w.IS_LFL_UNIVERSE, FALSE AS IS_WEEK_OVERRIDDEN, ev.EVENTS, ev.SALES_FACTOR
+FROM ${S}.VW_STORE_PLAN_WEEKLY w
+JOIN cells c ON c.STORE_CODE = w.STORE_CODE AND c.WEEK_END_DATE = w.WEEK_END_DATE
+LEFT JOIN ev ON ev.STORE_CODE = w.STORE_CODE AND ev.WEEK_END_DATE = w.WEEK_END_DATE
+ORDER BY w.STORE_CODE, w.WEEK_SLOT
+`;
+
+export const SQL_SCENARIO_EVENTS = `
+SELECT EVENT_ID, STORE_CODE, START_DATE, END_DATE, EVENT_TYPE, ADJUSTMENT_METHOD, ADJUSTMENT_VALUE,
+       DESCRIPTION, STATUS, CREATED_BY, CREATED_AT
+FROM ${S}.STORE_PLAN_EVENT WHERE SCENARIO_ID = ? AND STATUS = 'ACTIVE' ORDER BY START_DATE, STORE_CODE
+`;
+
+export const SQL_SCENARIO_TARGETS = `
+SELECT TARGET_ID, MEASURE_CODE, SCOPE_TYPE, SCOPE_CODE, START_DATE, END_DATE, CURRENT_VALUE, TARGET_VALUE,
+       ALLOCATION_METHOD, CREATED_BY, CREATED_AT
+FROM ${S}.STORE_PLAN_TARGET WHERE SCENARIO_ID = ? ORDER BY CREATED_AT DESC
+`;
+
+/** The months a sandbox may edit. Unselected months still show, read-only, so a
+ *  sandbox's totals stay comparable with the live plan. */
+export const SQL_SCENARIO_PERIODS = `
+SELECT PERIOD_KEY, IS_SELECTED FROM ${S}.PLAN_SCENARIO_PERIOD WHERE SCENARIO_ID = ? ORDER BY PERIOD_KEY
+`;
+
+export const SQL_STORE_COMMENTS = `
+SELECT COMMENT_ID, SCENARIO_ID, STORE_CODE, COMMENT_TEXT, PARENT_COMMENT_ID, STATUS, CREATED_BY, CREATED_AT
+FROM ${S}.PLAN_COMMENT WHERE NVL(SCENARIO_ID, 0) = ? ORDER BY CREATED_AT DESC
+`;
+
+/** The store list the opening assistant resolves names against, with each
+ *  store's last year and plan so it can tell a comparable from a new store. */
+export const SQL_ASSIST_STORES = `
+SELECT d.STORE_CODE, d.STORE_NAME, d.STATE, d.REGION, d.STORE_FORMAT, d.IS_NEW_STORE, d.BENCHMARK_STORE_CODE,
+       d.MIX_SOURCE_STORE_CODE,
+       ROUND(NVL(SUM(v.LY_SALES_AUD), 0), 0) AS LY_SALES_AUD,
+       ROUND(NVL(SUM(v.PLAN_SALES_AUD), 0), 0) AS PLAN_SALES_AUD
+FROM ${S}.DIM_STORE d
+LEFT JOIN ${S}.VW_STORE_PLAN_WEEKLY v ON v.STORE_CODE = d.STORE_CODE
+GROUP BY d.STORE_CODE, d.STORE_NAME, d.STATE, d.REGION, d.STORE_FORMAT, d.IS_NEW_STORE, d.BENCHMARK_STORE_CODE, d.MIX_SOURCE_STORE_CODE
+ORDER BY d.STORE_CODE
+`;
+
+/** The plan half's first and last day, and the default halo. */
+export const SQL_PLAN_WINDOW = `
+SELECT MIN(DATEADD(day, -6, TY_WEEK_END_DATE)) AS FIRST_DAY, MAX(TY_WEEK_END_DATE) AS LAST_DAY,
+       (SELECT TRY_TO_NUMBER(SETTING_VALUE) FROM ${S}.PLANNING_SETTING WHERE SETTING_KEY = 'NEW_STORE_HALO_WEEKS') AS DEFAULT_HALO_WEEKS
+FROM ${S}.STORE_PLAN_WEEK_SLOT
+`;
+
+/** Chain totals an opening is measured against, and the benchmark's own half. */
+export const SQL_ASSIST_TOTALS = `
+SELECT SUM(PLAN_SALES_AUD) AS PLAN_AUD, SUM(PLAN_MARGIN_AUD) AS MARGIN_AUD,
+       SUM(IFF(IS_LY_BASE, LY_SALES_AUD, 0)) AS LY_AUD,
+       SUM(IFF(IS_LFL_UNIVERSE, 0, PLAN_SALES_AUD)) AS NEW_STORE_AUD,
+       SUM(IFF(IS_LFL_UNIVERSE, PLAN_SALES_AUD, 0)) AS LFL_PLAN_AUD,
+       SUM(IFF(IS_LFL_UNIVERSE, LY_SALES_AUD, 0)) AS LFL_LY_AUD,
+       SUM(IFF(STORE_CODE = ?, PLAN_SALES_AUD, 0)) AS BENCH_PLAN_AUD
+FROM ${S}.VW_STORE_PLAN_WEEKLY
+`;
+
+/** The live plan's total, so a sandbox can say how far it has moved from it. */
+export const SQL_LIVE_TOTALS = `
+SELECT SUM(PLAN_SALES_AUD) AS PLAN_SALES_AUD, SUM(PLAN_MARGIN_AUD) AS PLAN_MARGIN_AUD FROM ${S}.VW_STORE_PLAN_WEEKLY
+`;
+
+/** The plan months, with both calendar keys. */
+export const SQL_PLAN_MONTHS = `
+SELECT PERIOD_KEY, SORT_KEY, PERIOD_LABEL, CAL_LABEL, MONTH_NAME, FY_PERIOD_NO, PERIOD_START_DATE, PERIOD_END_DATE,
+       EXPECTED_WEEKS, FY_QUARTER
+FROM ${S}.VW_TIME_PERIOD
+WHERE TIME_GRAIN = 'MONTH' AND FY_YEAR = 2027 AND FY_HALF = 'H1'
+ORDER BY SORT_KEY
+`;
+
+// ─── MFP ─────────────────────────────────────────────────────────────────────
+
+/** The product plan, both levels, every measure the grid and the model need.
+ *  Driven from the hierarchy, so a department with no plan still appears -- as
+ *  "awaiting product plan", not as a zero that would read as a measured result. */
+export const SQL_MFP_GRID = `
+WITH entity AS (
+  SELECT 'RBU' AS PLAN_LEVEL, RBU_CODE, MIN(RBU_DESCRIPTION) AS RBU_DESCRIPTION, RBU_CODE AS ENTITY_CODE,
+         MIN(RBU_DESCRIPTION) AS ENTITY_NAME
+  FROM ${S}.DIM_MERCH_HIERARCHY GROUP BY RBU_CODE
+  UNION ALL
+  SELECT 'DEPARTMENT', RBU_CODE, MIN(RBU_DESCRIPTION), DEPARTMENT_NUM, MIN(DEPARTMENT_NAME_BARE)
+  FROM ${S}.DIM_MERCH_HIERARCHY GROUP BY RBU_CODE, DEPARTMENT_NUM
+)
+SELECT e.PLAN_LEVEL, e.RBU_CODE, e.RBU_DESCRIPTION, e.ENTITY_CODE, NVL(m.ENTITY_NAME, e.ENTITY_NAME) AS ENTITY_NAME,
+       m.ENTITY_CODE IS NOT NULL AS HAS_PLAN, m.LFL_STRATEGY,
+       m.F26_ACTUAL, m.F26_POS_ACTUAL, m.LFL_PCT, m.LFL_FORECAST, m.GROWTH_STATED, m.F26_MIX_PCT,
+       m.TPR_BUDGET, m.GROWTH_DERIVED, m.F27_TPR_MIX_PCT, m.GROWTH_BREAK_PTS, m.EXPANSION_PREMIUM_PCT,
+       m.IS_NEW_ENTITY, m.VAR_TO_LY_AUD, m.VAR_BUD_TO_TPR_AUD,
+       m.F26_ASP, m.TPR_ASP, m.ASP_GROWTH_PCT, m.ASP_VAR_LY_AUD, m.F26_UNITS, m.TPR_UNITS, m.UNIT_GROWTH_PCT,
+       m.F26_FIRST_MARGIN_PCT, m.F27_FIRST_MARGIN_PCT, m.FIRST_MARGIN_MOVE_PTS, m.EXIT_MARGIN_PCT,
+       m.POS_PCT, m.POS_SALES,
+       m.OPT_PRESENTED, m.OPT_NEW, m.OPT_ONGOING, m.OPT_COMMITTED, m.OPT_DESELECTED, m.OPT_NEW_DESELECTED,
+       m.OPT_ONGOING_DESELECTED, m.DESELECT_PCT, m.NEW_PCT_OF_COMMITTED, m.SALES_AT_RISK_AUD,
+       m.ID1_VARIANCE, m.ID2_VARIANCE, m.ID3_VARIANCE, m.UPLOAD_ID, m.LOADED_AT
+FROM entity e
+LEFT JOIN ${S}.VW_MFP_IDENTITY m ON m.ENTITY_CODE = e.ENTITY_CODE AND m.PLAN_LEVEL = e.PLAN_LEVEL
+ORDER BY e.RBU_CODE, IFF(e.PLAN_LEVEL = 'RBU', 0, 1), m.TPR_BUDGET DESC NULLS LAST, e.ENTITY_CODE
+`;
+
+/** The RBU mix bridge. The stored RBU budget is struck from the store plan at a
+ *  point in time and goes stale when the store plan moves, so the implied value
+ *  is computed live beside it and the drift returned: the check that everyone is
+ *  still working to the same top line. */
+export const SQL_MFP_MIX = `
+WITH pt AS (SELECT SUM(PLAN_SALES_AUD) AS TOTAL FROM ${S}.VW_STORE_PLAN_WEEKLY),
+bu AS (SELECT RBU_CODE, SUM(TPR_BUDGET) AS TPR FROM ${S}.VW_MFP_IDENTITY WHERE PLAN_LEVEL = 'DEPARTMENT' GROUP BY RBU_CODE)
+SELECT t.RBU_CODE, t.RBU_DESCRIPTION, t.LY_MIX_PCT_MEASURED, t.LY_MIX_PCT_STATED, t.PLAN_MIX_PCT_STATED,
+       t.PROVENANCE, t.NOTE,
+       t.PLAN_SALES_AUD                                   AS PLAN_SALES_STORED_AUD,
+       t.PLAN_MIX_PCT_STATED * pt.TOTAL                   AS PLAN_SALES_IMPLIED_AUD,
+       t.PLAN_MIX_PCT_STATED * pt.TOTAL - t.PLAN_SALES_AUD AS PLAN_SALES_DRIFT_AUD,
+       bu.TPR                                             AS TPR_BUDGET_AUD,
+       DIV0(bu.TPR, pt.TOTAL)                             AS TPR_MIX_PCT_DERIVED,
+       pt.TOTAL                                           AS STORE_PLAN_TOTAL_AUD,
+       SUM(NVL(t.PLAN_MIX_PCT_STATED, 0)) OVER ()          AS MIX_STATED_TOTAL_PCT,
+       SUM(NVL(t.LY_MIX_PCT_STATED, 0)) OVER ()            AS LY_MIX_TOTAL_PCT
+FROM ${S}.RBU_MIX_TARGET t CROSS JOIN pt LEFT JOIN bu ON bu.RBU_CODE = t.RBU_CODE
+WHERE t.IS_TRADED
+ORDER BY t.RBU_CODE
+`;
+
+/** Store plan -> RBU mix -> MFP -> departments, with the variance at each hop. */
+export const SQL_CHAIN = `
+SELECT HOP, STAGE, RBU_CODE, ENTITY, VALUE_AUD, PARENT_VALUE_AUD, SHARE_OF_PARENT, VARIANCE_AUD, NOTE
+FROM ${S}.VW_PLANNING_CHAIN
+ORDER BY HOP, RBU_CODE, VALUE_AUD DESC NULLS LAST
+`;
+
+/** The MFP phased to month against the WSSI budget the business trades against. */
+export const SQL_MFP_WSSI_RECON = `
+SELECT RBU_CODE, PERIOD_KEY, MONTH_NAME, FY_PERIOD_NO, MFP_AUD, BUD_AUD, VARIANCE_AUD, STATUS
+FROM ${S}.VW_MFP_WSSI_RECON
+ORDER BY RBU_CODE, PERIOD_KEY
+`;
+
+/** Monthly phasing per department: an allocation on the store plan's shape. */
+export const SQL_MFP_PHASED = `
+SELECT DEPARTMENT_NUM, DEPARTMENT_NAME, RBU_CODE, PERIOD_KEY, FY_PERIOD_NO, MONTH_NAME, SHARE_OF_HALF,
+       MONTH_BUDGET_AUD, MONTH_LFL_FORECAST_AUD, BASIS, IS_SOURCE_FIGURE
+FROM ${S}.VW_MFP_PHASED
+ORDER BY DEPARTMENT_NUM, FY_PERIOD_NO
+`;
+
+/** How each version of the product plan entered the model. */
+export const SQL_MFP_UPLOADS = `
+SELECT UPLOAD_ID, PLAN_LEVELS, ENTITIES, ROW_COUNT, MEASURE_COUNT, SUPERSEDED_ROWS, SOURCE_FILE, RATIONALE,
+       CHECK_RESULTS, HAS_SOFT_FAILURE, UPLOADED_BY, UPLOADED_AT
+FROM ${S}.MFP_PLAN_UPLOAD
+ORDER BY UPLOAD_ID DESC
+`;
+
+/** Every change to the product plan and the RBU mix. */
+export const SQL_MFP_HISTORY = `
+SELECT o.OVERRIDE_ID, o.PLAN_KIND, o.ENTITY_CODE, o.MEASURE_CODE, o.OLD_VALUE, o.NEW_VALUE, o.REASON_CODE,
+       o.RATIONALE, o.CHANGED_BY, o.CHANGED_AT, o.EDIT_CLASS, o.OWNING_PARTY, o.ON_BEHALF_OF,
+       o.IS_POST_LOCK_AMENDMENT, o.ESCALATION_NOTE, c.COMPLIANCE_STATUS
+FROM ${S}.PLAN_CELL_OVERRIDE o
+LEFT JOIN ${S}.VW_OVERRIDE_COMPLIANCE c ON c.OVERRIDE_ID = o.OVERRIDE_ID
+WHERE o.PLAN_KIND IN ('MFP', 'MFP_UPLOAD', 'RBU_MIX')
+ORDER BY o.CHANGED_AT DESC, o.OVERRIDE_ID DESC
+`;
+
+/** Planning settings, all of them: several pages read one or two. */
+export const SQL_SETTINGS = `
+SELECT SETTING_KEY, SETTING_VALUE, VALUE_TYPE, DESCRIPTION, IS_ASSUMPTION, SOURCE
+FROM ${S}.PLANNING_SETTING ORDER BY SETTING_KEY
+`;
+
+// ─── WSSI ────────────────────────────────────────────────────────────────────
+
+/** The WSSI at one grain and RBU scope: components only. Every rate in the
+ *  140-row layout is rebuilt from these in src/lib/hop/wssi-model.ts. */
+export const SQL_WSSI_GRAIN = `
+SELECT * FROM ${S}.VW_WSSI_GRAIN WHERE TIME_GRAIN = ? AND RBU_SCOPE = ? ORDER BY SORT_KEY, VERSION
+`;
+
+/** The 140-row layout, with the assumption behind each placeholder. ROW_KIND
+ *  travels with each row so the grid can say why a cell is empty: a measured
+ *  zero, a figure resting on an assumption and a feed never supplied all look
+ *  the same unless they are told apart. */
+export const SQL_WSSI_SPEC = `
+SELECT m.DISPLAY_ORDER, m.METRIC_GROUP, m.ROW_LABEL, m.VERSION_HINT, m.IS_VARIANCE_ROW, m.MEASURE_CODE, m.ROW_KIND,
+       m.MEASURE_BASIS, m.SOURCE_KIND, m.FORMULA_TEXT, m.AWAITING_REASON,
+       p.IS_PLACEHOLDER, p.BASIS_NOTE, p.PROVENANCE, p.VALUE_KIND, p.FACTOR AS DEFAULT_FACTOR
+FROM ${S}.WSSI_ROW_MEASURE_MAP m
+LEFT JOIN ${S}.MISSING_WSSI_MEASURES p ON p.MEASURE_CODE = m.MEASURE_CODE
+ORDER BY m.DISPLAY_ORDER
+`;
+
+/** The latest display pin per cell for a grain and scope. A cleared pin is a row
+ *  with no value. */
+export const SQL_WSSI_PINS = `
+SELECT TIME_GRAIN, PERIOD_KEY, RBU_SCOPE, DISPLAY_ORDER, ROW_LABEL, OLD_VALUE, NEW_VALUE, REASON_CODE, RATIONALE, CHANGED_BY, CHANGED_AT
+FROM ${S}.WSSI_CELL_OVERRIDE
+WHERE TIME_GRAIN = ? AND RBU_SCOPE = ?
+QUALIFY ROW_NUMBER() OVER (PARTITION BY TIME_GRAIN, PERIOD_KEY, RBU_SCOPE, DISPLAY_ORDER ORDER BY CHANGED_AT DESC, OVERRIDE_ID DESC) = 1
+`;
+
+/** WSSI self-checks, summarised. */
+export const SQL_WSSI_INTEGRITY = `
+SELECT CHECK_NAME, VERSION, COUNT(*) AS BREACHES, COUNT(DISTINCT DEPARTMENT_NAME) AS DEPTS,
+       MIN(WEEK_END_DATE) AS FIRST_WEEK, MAX(WEEK_END_DATE) AS LAST_WEEK, MAX(RULE) AS RULE,
+       ROUND(MIN(REPORTED), 1) AS MIN_REPORTED, ROUND(MAX(REPORTED), 1) AS MAX_REPORTED
+FROM ${S}.VW_WSSI_INTEGRITY
+GROUP BY CHECK_NAME, VERSION
+ORDER BY BREACHES DESC
+`;
+
+/** Planner inputs, one row per edit as it was typed. */
+export const SQL_WSSI_INPUTS = `
+SELECT BATCH_ID, MIN(MEASURE_CODE) AS MEASURE_CODE, NVL(MIN(RBU_CODE), 'ALL') AS RBU_SCOPE, MIN(TYPED_GRAIN) AS TYPED_GRAIN,
+       MIN(TYPED_PERIOD_KEY) AS TYPED_PERIOD_KEY, MIN(TYPED_VALUE) AS TYPED_VALUE, MIN(OLD_VALUE) AS OLD_VALUE,
+       MIN(VALUE_FORM) AS VALUE_FORM, COUNT(*) AS WEEKS, MIN(REASON_CODE) AS REASON_CODE, MIN(RATIONALE) AS RATIONALE,
+       MIN(CHANGED_BY) AS CHANGED_BY, MIN(CHANGED_AT) AS CHANGED_AT
+FROM ${S}.WSSI_PLANNED_INPUT
+GROUP BY BATCH_ID
+ORDER BY CHANGED_AT DESC
+`;
+
+// ─── Range review (TPR) ──────────────────────────────────────────────────────
+
+/** The four gates the range narrows through. */
+export const SQL_FUNNEL = `
+SELECT GATE_SEQ, GATE_CODE, GATE_NAME, OWNER, IS_MEASURABLE_TODAY, OPTIONS_AT_GATE, OPTIONS_LOST_AT_GATE, LOSS_PCT,
+       UNITS_LOST, POS_FULLY_LOST, SALES_AT_RISK_AUD, INDICATIVE_SKU_COUNT, STATUS, DATA_SOURCE
+FROM ${S}.VW_RANGE_FUNNEL ORDER BY GATE_SEQ
+`;
+
+/** Committed range against the minimum credible offer, per department. */
+export const SQL_CREDIBILITY = `
+SELECT c.DEPARTMENT_NUM, c.DEPARTMENT_NAME, c.LFL_STRATEGY, c.OPT_PRESENTED, c.OPT_COMMITTED, c.OPT_DESELECTED,
+       c.ADOPTION_PCT, c.MIN_CREDIBLE_ADOPTION_PCT, c.CREDIBILITY_STATUS, c.SALES_AT_RISK_AUD, c.NEW_PCT_OF_COMMITTED,
+       c.THRESHOLD_IS_ASSUMPTION, c.THRESHOLD_RATIONALE,
+       m.OPT_NEW, m.OPT_ONGOING, m.OPT_NEW_DESELECTED, m.OPT_ONGOING_DESELECTED, m.TPR_BUDGET
+FROM ${S}.VW_RANGE_CREDIBILITY c
+JOIN ${S}.VW_MFP_IDENTITY m ON m.PLAN_LEVEL = 'DEPARTMENT' AND m.ENTITY_CODE = c.DEPARTMENT_NUM
+ORDER BY c.DEPARTMENT_NUM
+`;
+
+/** Range lost after commitment: supplier short-ship on delivered orders, by department. */
+export const SQL_ATTRITION_DEPT = `
+SELECT DEPARTMENT_NAME, SUM(POS) AS POS, SUM(ORDERED_UNITS) AS ORDERED_UNITS, SUM(DELIVERED_UNITS) AS DELIVERED_UNITS,
+       SUM(UNITS_LOST) AS UNITS_LOST, 1 - DIV0(SUM(DELIVERED_UNITS), SUM(ORDERED_UNITS)) AS ATTRITION_PCT,
+       SUM(SHORT_POS) AS SHORT_POS, SUM(POS_FULLY_LOST) AS POS_FULLY_LOST,
+       DIV0(SUM(AVG_LEAD_DAYS * POS), SUM(POS)) AS AVG_LEAD_DAYS, DIV0(SUM(AVG_STD_LEAD_DAYS * POS), SUM(POS)) AS AVG_STD_LEAD_DAYS
+FROM ${S}.VW_SOURCING_ATTRITION GROUP BY DEPARTMENT_NAME ORDER BY ATTRITION_PCT DESC
+`;
+
+/** The suppliers losing the most range after commitment. */
+export const SQL_ATTRITION_SUPPLIER = `
+SELECT SUPPLIER_NAME, LISTAGG(DISTINCT DEPARTMENT_NAME, ', ') AS DEPARTMENTS, SUM(POS) AS POS,
+       SUM(ORDERED_UNITS) AS ORDERED_UNITS, SUM(UNITS_LOST) AS UNITS_LOST,
+       1 - DIV0(SUM(DELIVERED_UNITS), SUM(ORDERED_UNITS)) AS ATTRITION_PCT, SUM(SHORT_POS) AS SHORT_POS
+FROM ${S}.VW_SOURCING_ATTRITION GROUP BY SUPPLIER_NAME ORDER BY ATTRITION_PCT DESC LIMIT 12
+`;
+
+// ─── Approve and lock ────────────────────────────────────────────────────────
+
+export const SQL_APPROVALS = `
+SELECT a.APPROVAL_ID, a.STATE, a.SCOPE, a.FY_YEAR, a.FY_HALF, a.SUBMITTED_BY, a.SUBMITTED_AT, a.APPROVED_BY, a.APPROVED_AT,
+       a.BOARD_MEETING_DATE, a.NARRATIVE, a.TOTAL_SALES_AUD, a.TOTAL_MARGIN_AUD, a.SUPERSEDED_BY,
+       (SELECT COUNT(*) FROM ${S}.PLAN_APPROVAL_SNAPSHOT s WHERE s.APPROVAL_ID = a.APPROVAL_ID) AS SNAPSHOT_ROWS
+FROM ${S}.PLAN_APPROVAL a ORDER BY a.APPROVAL_ID DESC
+`;
+
+export const SQL_AMENDMENTS = `
+SELECT AMENDMENT_ID, APPROVAL_ID, PRIOR_NARRATIVE, AMENDMENT_NOTE, AMENDED_BY, AMENDED_AT, CHANGED_FIGURES
+FROM ${S}.PLAN_APPROVAL_AMENDMENT ORDER BY AMENDED_AT
+`;
+
+/** The live plan against the approved baseline, by store. */
+export const SQL_VARIANCE_BY_STORE = `
+SELECT v.STORE_CODE, MAX(v.STORE_NAME) AS STORE_NAME, MAX(v.BASELINE_STATUS) AS BASELINE_STATUS,
+       SUM(v.APPROVED_SALES_AUD) AS APPROVED_SALES_AUD, SUM(v.CURRENT_SALES_AUD) AS CURRENT_SALES_AUD,
+       SUM(v.CURRENT_SALES_AUD) - NVL(SUM(v.APPROVED_SALES_AUD), 0) AS SALES_VARIANCE_AUD,
+       SUM(v.CURRENT_MARGIN_AUD) - NVL(SUM(v.APPROVED_MARGIN_AUD), 0) AS MARGIN_VARIANCE_AUD,
+       LISTAGG(DISTINCT IFF(ABS(NVL(v.SALES_VARIANCE_AUD, 1)) > 0.005, v.MONTH_NAME, NULL), ', ') AS MONTHS_MOVED
+FROM ${S}.VW_VARIANCE_TO_APPROVED v
+GROUP BY v.STORE_CODE
+HAVING ABS(SUM(v.CURRENT_SALES_AUD) - NVL(SUM(v.APPROVED_SALES_AUD), 0)) > 0.005
+    OR ABS(SUM(v.CURRENT_MARGIN_AUD) - NVL(SUM(v.APPROVED_MARGIN_AUD), 0)) > 0.005
+ORDER BY ABS(SALES_VARIANCE_AUD) DESC
+`;
+
+/** Every edit with its compliance against the rationale and escalation rules. */
+export const SQL_COMPLIANCE = `
+SELECT OVERRIDE_ID, PLAN_KIND, ENTITY_CODE, MONTH_NAME, MEASURE_CODE, OLD_VALUE, NEW_VALUE, REASON_CODE, RATIONALE,
+       CHANGED_BY, CHANGED_AT, APPROVAL_ID, SURFACE, EDIT_CLASS, OWNING_PARTY, ON_BEHALF_OF, IS_POST_LOCK_AMENDMENT,
+       ESCALATION_NOTE, COMPLIANCE_STATUS, (CHANGED_BY = 'migrated-from-spreadsheet') AS IS_MIGRATION
+FROM ${S}.VW_OVERRIDE_COMPLIANCE ORDER BY CHANGED_AT DESC, OVERRIDE_ID DESC
+`;
+
+export const SQL_DECISIONS = `
+SELECT DECISION_ID, TOPIC, QUESTION, DECISION, RATIONALE, IMPACT, STATUS, DECIDED_BY, DECIDED_AT, OWNING_PARTY
+FROM ${S}.DESIGN_DECISION ORDER BY IFF(STATUS = 'AWAITING_CUSTOMER', 0, 1), DECISION_ID
+`;
+
+export const SQL_FINDINGS = `
+SELECT FINDING_ID, PHASE, SEVERITY, OBJECT_NAME, COLUMN_NAME, FINDING, MEASURED_VALUE, ACTION_TAKEN, NEEDS_CUSTOMER_DECISION
+FROM ${S}.DATA_QUALITY_FINDING ORDER BY IFF(SEVERITY = 'HIGH', 0, IFF(SEVERITY = 'MEDIUM', 1, 2)), FINDING_ID
+`;
+
+/** Every figure in the plan that is judgement rather than data. */
+export const SQL_ASSUMPTIONS = `
+SELECT 'Planning setting' AS KIND, SETTING_KEY AS ITEM, SETTING_VALUE AS VALUE, DESCRIPTION AS BASIS, SOURCE
+FROM ${S}.PLANNING_SETTING WHERE IS_ASSUMPTION
+UNION ALL
+SELECT 'WSSI stand-in', MEASURE_LABEL, TO_VARCHAR(ROUND(FACTOR, 4)), BASIS_NOTE, PROVENANCE
+FROM ${S}.MISSING_WSSI_MEASURES WHERE IS_PLACEHOLDER
+UNION ALL
+SELECT 'Credible offer', DEPARTMENT_NAME, TO_VARCHAR(ROUND(MIN_CREDIBLE_ADOPTION_PCT * 100)) || '%', RATIONALE, 'Planning'
+FROM ${S}.RANGE_CREDIBILITY_RULE WHERE IS_ASSUMPTION
+ORDER BY 1, 2
+`;
+
+// ─── Ownership ───────────────────────────────────────────────────────────────
+
+/** All ownership for a surface, so a grid renders its treatment in one round
+ *  trip. assertEditable reads the same query for the one measure being edited,
+ *  so the treatment a cell is drawn with and the rule it is held to cannot drift. */
+export const SQL_SURFACE_OWNERSHIP = `
+SELECT SURFACE, MEASURE_CODE, MEASURE_LABEL, EDIT_CLASS, OWNING_PARTY, EDITABLE_IN_APP, LOCK_BEHAVIOUR,
+       REQUIRES_RATIONALE, OWNERSHIP_HINT, CELL_TREATMENT, IS_INFERRED, EVIDENCE, CONFIRMED_BY, CONFIRMED_AT
+FROM ${S}.VW_MEASURE_OWNERSHIP WHERE SURFACE = ? ORDER BY MEASURE_CODE
+`;
+
+export const SQL_OWNERSHIP_ALL = `
+SELECT o.SURFACE, o.MEASURE_CODE, o.MEASURE_LABEL, o.EDIT_CLASS, o.OWNING_PARTY, o.EDITABLE_IN_APP, o.LOCK_BEHAVIOUR,
+       o.REQUIRES_RATIONALE, o.IS_INFERRED, o.EVIDENCE, o.CONFIRMED_BY, o.CONFIRMED_AT, o.CELL_TREATMENT, o.OWNERSHIP_HINT,
+       NVL(e.EDITS, 0) AS EDITS, e.LAST_EDIT_AT
+FROM ${S}.VW_MEASURE_OWNERSHIP o
+LEFT JOIN (SELECT MEASURE_CODE, COUNT(*) AS EDITS, MAX(CHANGED_AT) AS LAST_EDIT_AT
+             FROM ${S}.PLAN_CELL_OVERRIDE WHERE CHANGED_BY <> 'migrated-from-spreadsheet' GROUP BY MEASURE_CODE) e
+  ON e.MEASURE_CODE = o.MEASURE_CODE
+ORDER BY o.SURFACE, o.MEASURE_CODE
+`;
+
+// ─── Settings and AI ─────────────────────────────────────────────────────────
+
+export const SQL_DOCTRINE = `
+SELECT d.DOCTRINE_VERSION, d.DOCTRINE_TEXT, d.TONE, d.IS_ACTIVE, d.AUTHORED_BY, d.RATIONALE, d.CREATED_AT,
+       (SELECT COUNT(*) FROM ${S}.INSIGHT_RUN r WHERE r.DOCTRINE_VERSION = d.DOCTRINE_VERSION AND r.ERROR_MESSAGE IS NULL) AS INSIGHTS
+FROM ${S}.INSIGHT_DOCTRINE d ORDER BY d.DOCTRINE_VERSION DESC
+`;
+
+export const SQL_TEMPLATES = `
+SELECT TEMPLATE_ID, SURFACE, NAME, TASK_INSTRUCTION, FOCUS_MEASURES, MODEL, MAX_FINDINGS, IS_ACTIVE, UPDATED_BY, UPDATED_AT
+FROM ${S}.INSIGHT_TEMPLATE ORDER BY TEMPLATE_ID
+`;
+
+export const SQL_CREDIBILITY_RULES = `
+SELECT RBU_CODE, DEPARTMENT_NUM, DEPARTMENT_NAME, MIN_CREDIBLE_ADOPTION_PCT, PLANOGRAM_MIN_OPTIONS, IS_ASSUMPTION, RATIONALE
+FROM ${S}.RANGE_CREDIBILITY_RULE ORDER BY DEPARTMENT_NUM
+`;
+
+/** What the AI insights have cost, by surface and model. */
+export const SQL_MODEL_USAGE = `
+SELECT SURFACE, MODEL, COUNT(*) AS RUNS, COUNT_IF(IS_VERIFIED) AS VERIFIED, COUNT_IF(ERROR_MESSAGE IS NOT NULL) AS FAILED,
+       SUM(PROMPT_TOKENS) AS PROMPT_TOKENS, SUM(COMPLETION_TOKENS) AS COMPLETION_TOKENS, SUM(TOTAL_TOKENS) AS TOTAL_TOKENS,
+       MAX(GENERATED_AT) AS LAST_RUN
+FROM ${S}.INSIGHT_RUN GROUP BY SURFACE, MODEL ORDER BY SURFACE, MODEL
+`;
+
+/** The latest successful run per surface, verified or not: what each screen is
+ *  currently showing, and under which method. Only surfaces with a template show
+ *  an insight; the store-entry assist is logged to the same table but answers
+ *  one question and is shown nowhere afterwards. */
+export const SQL_INSIGHT_LATEST_RUNS = `
+SELECT SURFACE, DOCTRINE_VERSION, MODEL, IS_VERIFIED, PROMPT_TOKENS, COMPLETION_TOKENS, TOTAL_TOKENS, GENERATED_BY, GENERATED_AT
+FROM ${S}.VW_INSIGHT_LATEST
+WHERE SURFACE IN (SELECT SURFACE FROM ${S}.INSIGHT_TEMPLATE WHERE IS_ACTIVE)
+ORDER BY SURFACE
+`;
