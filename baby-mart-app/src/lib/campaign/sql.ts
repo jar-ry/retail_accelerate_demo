@@ -349,12 +349,6 @@ export const SQL_REJECTED_IDEAS = `SELECT TITLE, DECISION_REASON FROM ${S}.IDEA 
 export const SQL_LEARNINGS = `SELECT l.*, c.NAME AS CAMPAIGN_NAME FROM ${S}.LEARNING l LEFT JOIN ${S}.CAMPAIGN c ON c.CAMPAIGN_ID = l.CAMPAIGN_ID
 ORDER BY l.PUBLISHED_AT DESC, ABS(l.LIFT_PP) DESC`;
 
-// ─── Voice enrichment quality (Settings) ─────────────────────────────────────
-export const SQL_ENRICH_QUALITY = `SELECT * FROM ${S}.VW_VOICE_ENRICH_QUALITY`;
-
-export const SQL_ENRICH_COST = `SELECT COUNT(*) AS TEXTS, MAX(MODEL) AS MODEL, MAX(ENRICHED_AT) AS LAST_RUN
-FROM ${S}.VOICE_ENRICHMENT WHERE ENRICH_METHOD = 'BUILTIN_V1'`;
-
 // ─── Overview and audiences ──────────────────────────────────────────────────
 
 export const SQL_AUDIENCES_DRAFT = `SELECT a.AUDIENCE_ID, a.NAME, a.DESCRIPTION, a.SPEC, a.VERSION, a.SOURCE, a.SIZE_AT_SAVE, a.REACHABLE_AT_SAVE, a.STATUS,

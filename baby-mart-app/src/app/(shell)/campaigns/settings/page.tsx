@@ -3,16 +3,15 @@
 import { useState } from "react";
 import { PageHeader, Card, Loading, ErrorState, Th, Td, Banner, Button, inputCls } from "../_components/ui";
 import { useCmp, useCmpAction, type Row } from "../_components/useCmp";
-import { num, toNum, isoDateTime, pct } from "@/lib/campaign/format";
+import { num, toNum, isoDateTime } from "@/lib/campaign/format";
 
 export default function CampaignSettingsPage() {
-  const { data, isLoading, error } = useCmp<{ settings: Row[]; usage: Row[]; quality: Row | null; enrichCost: Row | null; models: string[] }>("settings");
+  const { data, isLoading, error } = useCmp<{ settings: Row[]; usage: Row[]; models: string[] }>("settings");
   const save = useCmpAction("settings");
   const [edit, setEdit] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   if (isLoading) return <Loading what="settings" />;
   if (error || !data) return <ErrorState message={(error as Error)?.message ?? "No data"} />;
-  const q = data.quality;
   return (
     <div className="p-6">
       <PageHeader title="Campaign settings" subtitle="Guardrails, alert thresholds and the model. Every change is recorded with who made it." />
@@ -43,23 +42,13 @@ export default function CampaignSettingsPage() {
           })}</tbody>
         </table>
       </Card>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div>
         <Card title="AI usage" subtitle="Every AI run the persona makes, from AI_RUN: the campaign agents (ideas, builder, investigations) and AI_COMPLETE (copy, audience requests)">
           <table className="w-full text-xs"><thead><tr className="border-b border-slate-200"><Th>Stage</Th><Th>Engine</Th><Th align="right">Runs</Th><Th align="right">Verified</Th><Th align="right">Failed</Th><Th align="right">Tokens</Th><Th>Last</Th></tr></thead>
             <tbody>{data.usage.map((u) => (
               <tr key={`${String(u.STAGE)}-${String(u.ENGINE)}`} className="border-b border-slate-50"><Td>{String(u.STAGE)}</Td><Td className="text-slate-600">{String(u.ENGINE)}</Td><Td align="right" mono>{num(toNum(u.RUNS))}</Td><Td align="right" mono>{num(toNum(u.VERIFIED))}</Td>
                 <Td align="right" mono className={(toNum(u.FAILED) ?? 0) > 0 ? "text-red-600" : ""}>{num(toNum(u.FAILED))}</Td><Td align="right" mono>{toNum(u.TOKENS) === null ? "–" : num(toNum(u.TOKENS))}</Td><Td className="text-slate-500">{isoDateTime(u.LAST_RUN)}</Td></tr>
             ))}{data.usage.length === 0 && <tr><Td colSpan={7} className="text-slate-500">No AI runs yet.</Td></tr>}</tbody></table>
-        </Card>
-        <Card title="How well AI reads the voice" subtitle="AI_SENTIMENT and AI_CLASSIFY's reading of each verbatim, compared with the label it was generated from">
-          {q ? (
-            <table className="w-full text-xs"><tbody>
-              {[["Texts compared", num(toNum(q.TEXTS))], ["Theme agreement", pct(toNum(q.THEME_AGREEMENT), 0)], ["Sentiment agreement", pct(toNum(q.SENTIMENT_AGREEMENT), 0)],
-                ["Polarity direction", pct(toNum(q.POLARITY_DIRECTION_AGREEMENT), 0)], ["Child stage recall", pct(toNum(q.STAGE_RECALL), 0)], ["Purchase intent recall", pct(toNum(q.INTENT_RECALL), 0)]].map(([l, v]) => (
-                <tr key={l} className="border-b border-slate-50"><Td>{l}</Td><Td align="right" mono>{v}</Td></tr>))}
-              {data.enrichCost && <tr><Td>Read by</Td><Td align="right" mono>{String(data.enrichCost.MODEL ?? "–")}</Td></tr>}
-            </tbody></table>
-          ) : <p className="text-xs text-slate-500">Not enriched yet.</p>}
         </Card>
       </div>
     </div>

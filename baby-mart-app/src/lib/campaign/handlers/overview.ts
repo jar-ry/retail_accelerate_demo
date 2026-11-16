@@ -13,8 +13,8 @@ export async function getOverview() {
 }
 
 export async function getSettings() {
-  const [settings, usage, quality, cost] = await batch([SQL.SQL_SETTINGS, SQL.SQL_AI_USAGE, SQL.SQL_ENRICH_QUALITY, SQL.SQL_ENRICH_COST]);
-  return { settings, usage, quality: quality[0] ?? null, enrichCost: cost[0] ?? null, models: MODELS };
+  const [settings, usage] = await batch([SQL.SQL_SETTINGS, SQL.SQL_AI_USAGE]);
+  return { settings, usage, models: MODELS };
 }
 
 const EDITABLE: Record<string, (v: string) => boolean> = {

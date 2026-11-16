@@ -161,10 +161,6 @@ export default function CampaignPerformancePage({ params }: { params: Promise<{ 
               <div className="mt-1 text-xs">B − A: <b>{pp(data.abTest.bMinusAPp, 2)}</b> (95% CI {data.abTest.ciLowPp?.toFixed(2)} to {data.abTest.ciHighPp?.toFixed(2)}) · {data.abTest.significant ? <Pill tone="green">winner found</Pill> : <Pill>no winner yet</Pill>}</div>
             </Card>
           )}
-          <Card title="Replies" subtitle={data.negReplyShare === null ? "No replies yet" : `${Math.round(data.negReplyShare * 100)}% negative · read by AI_SENTIMENT and AI_CLASSIFY`}>
-            <ul className="mb-2 space-y-0.5 text-[11px]">{data.replies.slice(0, 5).map((r, i) => <li key={i}><Pill tone={r.SENTIMENT === "negative" ? "red" : r.SENTIMENT === "positive" ? "green" : "slate"}>{String(r.SENTIMENT)}</Pill> {String(r.THEME)}: {num(toNum(r.N))}</li>)}</ul>
-            <ul className="space-y-1">{data.replySamples.slice(0, 4).map((r, i) => <li key={i} className="text-[11px] text-slate-700">“{String(r.VOICE_TEXT)}” <span className="text-slate-400">· {String(r.STATE ?? "")}</span></li>)}</ul>
-          </Card>
         </div>
       </div>
 
