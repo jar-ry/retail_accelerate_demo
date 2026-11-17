@@ -384,9 +384,12 @@ async function respondViaSqlFunction(
 ) {
   send({ type: "status", message: "Analysing your question" });
 
+  // The payload sits inside a $$...$$ literal, so a message containing "$$"
+  // would close it. \u0024 is the JSON escape for "$": the agent reads the same
+  // text, but the SQL never sees a dollar sign.
   const payload = JSON.stringify({
     messages: [{ role: "user", content: [{ type: "text", text: message }] }],
-  });
+  }).replace(/\$/g, "\\u0024");
   const results = await executeMultiple([
     `SELECT TRY_PARSE_JSON(
        SNOWFLAKE.CORTEX.DATA_AGENT_RUN('${agentFqn}', $$${payload}$$)

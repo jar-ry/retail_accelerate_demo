@@ -137,6 +137,14 @@ export const AGENTS = {
     label: "Planning Investigator",
     fqn: `${process.env.HOP_SCHEMA?.trim() || `${DB}.HEAD_OF_PLANNING`}.HOP_INVESTIGATOR_AGENT`,
   },
+  // The Category Manager's brand investigator (agent/deploy_brand_agents.sql),
+  // beside the category agent in the AI schema. Separate from it for the same
+  // reason: an investigator's playbook would blur the text-to-SQL agent's job.
+  brandInvestigator: {
+    id: "brandInvestigator",
+    label: "Brand Investigator",
+    fqn: `${DB}.${SCHEMA_AI}.BRAND_INVESTIGATOR_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

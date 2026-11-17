@@ -41,14 +41,9 @@ export default function VendorScorecardPage() {
   const generateSummary = async () => {
     if (!data) return;
     setAiLoading(true);
-    const prompt = `Generate a concise executive summary (3-4 sentences) for this vendor scorecard to share with ${selected}:
-Revenue: ${fmt(data.summary.revenue)} | Margin: ${data.summary.marginPct}% | Products: ${data.summary.products} | Transactions: ${data.summary.transactions.toLocaleString()}
-Category share: ${data.categoryShare.map((c) => `${c.category}: ${c.sharePct}%`).join(", ")}
-Top products by revenue: ${data.topProducts.slice(0, 3).map((p) => p.product).join(", ")}
-
-Focus on performance highlights, growth areas, and joint business planning opportunities. Write from the retailer (Baby Mart) perspective addressing the vendor.`;
+    // The server loads this supplier's scorecard and writes the prompt itself.
     try {
-      const res = await fetch("/api/vendor/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const res = await fetch("/api/vendor/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "scorecard", supplier: selected }) });
       const d = await res.json();
       setAiSummary(d.text || "");
     } catch {} finally { setAiLoading(false); }

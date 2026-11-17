@@ -165,6 +165,59 @@ describe("head of planning investigator answers", () => {
   });
 });
 
+// Recorded runs of the Category Manager's brand investigator on canonical
+// (agent/deploy_brand_agents.sql): the Huggies Crawler "spike", Bugaboo's decline
+// and Mountain Buggy's growth.
+describe("brand investigator answers", () => {
+  type Rca = { headline: string; hypotheses: { hypothesis: string; verdict: string; evidence: string }[]; actions: { owner: string; action: string }[] };
+  const rca = (name: string) => splitBlock<Rca>(fixture(name).text, "rca").block!;
+  const verdict = (b: Rca, re: RegExp) => b.hypotheses.find((h) => re.test(h.hypothesis))?.verdict;
+  const tools = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use").map((e) => String(e.data.name));
+
+  it("verifies every AUD figure and percentage it wrote against its tools", () => {
+    for (const name of ["brand_crawler", "brand_bugaboo", "brand_mountain"]) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "rca");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("rca", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("checks the Crawler spike against POS and calls it a reporting artefact, not demand", () => {
+    expect(tools("brand_crawler")).toContain("CheckReportedDemand");
+    const b = rca("brand_crawler");
+    expect(b.headline).toMatch(/artefact|artifact|not in sales|not real/i);
+    expect(verdict(b, /artefact|artifact|report/i)).toBe("CONFIRMED");
+    expect(verdict(b, /step|week|spike/i)).toBe("RULED_OUT");
+    // The DIFOT collapse is a risk to raise with the supplier, not the cause of a sales move.
+    expect(verdict(b, /supply/i)).not.toBe("CONFIRMED");
+    expect(b.actions.some((a) => a.owner === "Data")).toBe(true);
+  });
+
+  it("finds Bugaboo's decline brand-specific and volume-led, and rules out supply", () => {
+    const b = rca("brand_bugaboo");
+    expect(verdict(b, /market/i)).toBe("RULED_OUT");
+    expect(verdict(b, /price/i)).toBe("RULED_OUT");
+    expect(verdict(b, /supply|stock/i)).toBe("RULED_OUT");
+  });
+
+  it("puts Mountain Buggy's growth on Single Strollers and the brand, not the market", () => {
+    const b = rca("brand_mountain");
+    expect(b.headline).toMatch(/Single Stroller/i);
+    expect(verdict(b, /market/i)).toBe("RULED_OUT");
+    expect(verdict(b, /Single Stroller/i)).toBe("CONFIRMED");
+  });
+
+  it("describes the brand investigator's steps in words", () => {
+    expect(describeInput("BrandEvidence", { BRAND: "Huggies", CLASS: "Crawler Nappies" })).toBe("Huggies · Crawler Nappies");
+    expect(describeInput("BrandEvidence", { BRAND: "Bugaboo", CLASS: "" })).toBe("Bugaboo");
+    expect(describeInput("TestBrandHypothesis", { BRAND: "Huggies", CLASS: "Crawler Nappies", DIMENSION: "supply" })).toBe("Huggies Crawler Nappies · split by supply");
+    expect(describeInput("CheckReportedDemand", { BRAND: "Huggies", CLASS: "Crawler Nappies" })).toBe("Huggies · Crawler Nappies");
+  });
+});
+
 describe("progress trail", () => {
   it("turns the recorded stream into steps that each finish", () => {
     const f = fixture("inv_001");

@@ -10,7 +10,7 @@ export async function GET() {
           SUM(f.NET_REVENUE) AS revenue,
           COUNT(DISTINCT f.TRANSACTION_ID) AS transactions,
           SUM(f.QUANTITY) AS units,
-          AVG(f.MARGIN_AMOUNT / NULLIF(f.NET_REVENUE, 0)) * 100 AS avg_margin,
+          SUM(f.MARGIN_AMOUNT) / NULLIF(SUM(f.NET_REVENUE), 0) * 100 AS avg_margin,
           SUM(f.NET_REVENUE) / COUNT(DISTINCT f.TRANSACTION_ID) AS avg_basket
         FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES f
         WHERE f.DATE_KEY >= 20260410 AND f.DATE_KEY <= 20260507
@@ -42,7 +42,7 @@ export async function GET() {
           dp.CATEGORY,
           SUM(f.NET_REVENUE) AS revenue,
           COUNT(DISTINCT db.BRAND_NAME) AS brand_count,
-          AVG(f.MARGIN_AMOUNT / NULLIF(f.NET_REVENUE, 0)) * 100 AS margin_pct
+          SUM(f.MARGIN_AMOUNT) / NULLIF(SUM(f.NET_REVENUE), 0) * 100 AS margin_pct
         FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES f
         JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT dp ON f.PRODUCT_KEY = dp.PRODUCT_KEY
         JOIN BABY_MART_DEMO.CURATED.DIM_BRAND db ON dp.BRAND_KEY = db.BRAND_KEY
@@ -76,7 +76,7 @@ export async function GET() {
           db.BRAND_NAME,
           dp.CATEGORY,
           SUM(f.NET_REVENUE) AS revenue,
-          AVG(f.MARGIN_AMOUNT / NULLIF(f.NET_REVENUE, 0)) * 100 AS margin_pct
+          SUM(f.MARGIN_AMOUNT) / NULLIF(SUM(f.NET_REVENUE), 0) * 100 AS margin_pct
         FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES f
         JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT dp ON f.PRODUCT_KEY = dp.PRODUCT_KEY
         JOIN BABY_MART_DEMO.CURATED.DIM_BRAND db ON dp.BRAND_KEY = db.BRAND_KEY

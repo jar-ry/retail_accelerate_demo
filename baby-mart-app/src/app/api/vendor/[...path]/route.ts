@@ -4,7 +4,12 @@
  * /api/vendor/benchmarking, /api/vendor/scorecard/:supplier, /api/vendor/insights
  */
 import { NextRequest, NextResponse } from "next/server";
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflake, querySnowflakeWithBinds } from "@/lib/snowflake";
+
+// Every value that reaches SQL from a request is BOUND, never spliced in. Doubling
+// quotes is not enough in Snowflake: string literals also honour backslash
+// escapes, so a supplier name ending in \' would close the literal.
+const q = (sql: string, binds: unknown[]) => (binds.length ? querySnowflakeWithBinds(sql, binds) : querySnowflake(sql));
 
 export async function GET(
   request: NextRequest,
@@ -85,10 +90,8 @@ async function handleGetSuppliers() {
 // ---------- /profitability ----------
 async function handleGetProfitability(request: NextRequest) {
   const supplier = request.nextUrl.searchParams.get("supplier") || "";
-  const supplierSafe = supplier.replace(/'/g, "''");
-  const supplierFilter = supplier
-    ? `AND s.SUPPLIER_NAME = '${supplierSafe}'`
-    : "";
+  const supplierFilter = supplier ? `AND s.SUPPLIER_NAME = ?` : "";
+  const b = supplier ? [supplier] : [];
 
   const waterfallSql = `
     SELECT
@@ -137,9 +140,9 @@ async function handleGetProfitability(request: NextRequest) {
   `;
 
   const [waterfall, skus, trend] = await Promise.all([
-    querySnowflake(waterfallSql),
-    querySnowflake(skuSql),
-    querySnowflake(trendSql),
+    q(waterfallSql, b),
+    q(skuSql, b),
+    q(trendSql, b),
   ]);
 
   const w: Record<string, unknown> = waterfall[0] || {};
@@ -195,9 +198,13 @@ async function handleGetProfitability(request: NextRequest) {
 
 // ---------- /benchmarking ----------
 async function handleGetBenchmarking(request: NextRequest) {
-  const category = request.nextUrl.searchParams.get("category") || "";
-  const categorySafe = category.replace(/'/g, "''");
-  const catFilter = category ? `AND p.CATEGORY = '${categorySafe}'` : "";
+  return NextResponse.json(await benchmarking(request.nextUrl.searchParams.get("category") || ""));
+}
+
+type Benchmark = { supplier: unknown; revenue: number; margin: number; units: number; marginPct: number; growthPct: number; sharePct: number };
+
+async function benchmarking(category: string): Promise<Benchmark[]> {
+  const catFilter = category ? `AND p.CATEGORY = ?` : "";
 
   const sql = `
     WITH current_period AS (
@@ -236,8 +243,8 @@ async function handleGetBenchmarking(request: NextRequest) {
     ORDER BY c.REVENUE DESC
   `;
 
-  const rows = await querySnowflake(sql);
-  const result = rows.map((r: Record<string, unknown>) => ({
+  const rows = await q(sql, category ? [category, category] : []);
+  return rows.map((r: Record<string, unknown>) => ({
     supplier: r["SUPPLIER_NAME"],
     revenue: Math.round(Number(r["REVENUE"])),
     margin: Math.round(Number(r["MARGIN"])),
@@ -246,12 +253,15 @@ async function handleGetBenchmarking(request: NextRequest) {
     growthPct: Number(r["GROWTH_PCT"] || 0),
     sharePct: Number(r["SHARE_PCT"] || 0),
   }));
-  return NextResponse.json(result);
 }
 
 // ---------- /scorecard/:supplier ----------
 async function handleGetScorecard(supplierName: string) {
-  const supplierSafe = supplierName.replace(/'/g, "''");
+  return NextResponse.json(await scorecard(supplierName));
+}
+
+async function scorecard(supplierName: string) {
+  const s1 = [supplierName];
 
   const summarySql = `
     SELECT
@@ -264,7 +274,7 @@ async function handleGetScorecard(supplierName: string) {
     FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES t
     JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT p ON t.PRODUCT_KEY = p.PRODUCT_KEY
     JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON p.SUPPLIER_KEY = s.SUPPLIER_KEY
-    WHERE s.SUPPLIER_NAME = '${supplierSafe}'
+    WHERE s.SUPPLIER_NAME = ?
   `;
 
   const trendSql = `
@@ -274,19 +284,19 @@ async function handleGetScorecard(supplierName: string) {
     FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES t
     JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT p ON t.PRODUCT_KEY = p.PRODUCT_KEY
     JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON p.SUPPLIER_KEY = s.SUPPLIER_KEY
-    WHERE s.SUPPLIER_NAME = '${supplierSafe}'
+    WHERE s.SUPPLIER_NAME = ?
     GROUP BY MONTH_LABEL ORDER BY MONTH_LABEL
   `;
 
   const shareSql = `
     SELECT p.CATEGORY,
-           SUM(CASE WHEN s.SUPPLIER_NAME = '${supplierSafe}' THEN t.NET_REVENUE ELSE 0 END) AS VENDOR_REV,
+           SUM(CASE WHEN s.SUPPLIER_NAME = ? THEN t.NET_REVENUE ELSE 0 END) AS VENDOR_REV,
            SUM(t.NET_REVENUE) AS CATEGORY_REV,
-           ROUND(SUM(CASE WHEN s.SUPPLIER_NAME = '${supplierSafe}' THEN t.NET_REVENUE ELSE 0 END) / NULLIF(SUM(t.NET_REVENUE), 0) * 100, 1) AS SHARE_PCT
+           ROUND(SUM(CASE WHEN s.SUPPLIER_NAME = ? THEN t.NET_REVENUE ELSE 0 END) / NULLIF(SUM(t.NET_REVENUE), 0) * 100, 1) AS SHARE_PCT
     FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES t
     JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT p ON t.PRODUCT_KEY = p.PRODUCT_KEY
     JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON p.SUPPLIER_KEY = s.SUPPLIER_KEY
-    WHERE p.CATEGORY IN (SELECT DISTINCT CATEGORY FROM BABY_MART_DEMO.CURATED.DIM_PRODUCT WHERE SUPPLIER_KEY = (SELECT SUPPLIER_KEY FROM BABY_MART_DEMO.CURATED.DIM_SUPPLIER WHERE SUPPLIER_NAME = '${supplierSafe}'))
+    WHERE p.CATEGORY IN (SELECT DISTINCT CATEGORY FROM BABY_MART_DEMO.CURATED.DIM_PRODUCT WHERE SUPPLIER_KEY = (SELECT SUPPLIER_KEY FROM BABY_MART_DEMO.CURATED.DIM_SUPPLIER WHERE SUPPLIER_NAME = ?))
     GROUP BY p.CATEGORY
   `;
 
@@ -297,21 +307,21 @@ async function handleGetScorecard(supplierName: string) {
     FROM BABY_MART_DEMO.CURATED.FACT_TRANSACTION_LINES t
     JOIN BABY_MART_DEMO.CURATED.DIM_PRODUCT p ON t.PRODUCT_KEY = p.PRODUCT_KEY
     JOIN BABY_MART_DEMO.CURATED.DIM_SUPPLIER s ON p.SUPPLIER_KEY = s.SUPPLIER_KEY
-    WHERE s.SUPPLIER_NAME = '${supplierSafe}'
+    WHERE s.SUPPLIER_NAME = ?
     GROUP BY p.PRODUCT_NAME, p.CLASS
     ORDER BY REVENUE DESC LIMIT 10
   `;
 
   const [summary, trend, share, topProducts] = await Promise.all([
-    querySnowflake(summarySql),
-    querySnowflake(trendSql),
-    querySnowflake(shareSql),
-    querySnowflake(topProductsSql),
+    q(summarySql, s1),
+    q(trendSql, s1),
+    q(shareSql, [supplierName, supplierName, supplierName]),
+    q(topProductsSql, s1),
   ]);
 
   const s: Record<string, unknown> = summary[0] || {};
 
-  return NextResponse.json({
+  return {
     supplier: supplierName,
     summary: {
       revenue: Math.round(Number(s["REVENUE"] || 0)),
@@ -339,22 +349,51 @@ async function handleGetScorecard(supplierName: string) {
       marginPct: Number(r["MARGIN_PCT"] || 0),
       units: Number(r["UNITS"]),
     })),
-  });
+  };
 }
 
 // ---------- /insights (POST) ----------
-async function handlePostInsights(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
-  const prompt = body.prompt || "";
+// The browser names WHICH summary it wants ({kind: "scorecard", supplier} or
+// {kind: "benchmarking", category}); the server loads the figures and writes the
+// prompt itself. It used to forward any prompt the browser sent straight to the
+// model, so anyone who could reach the app could spend model credits on anything
+// and put text in front of a planner that nothing on the page supported.
+const aud = (v: number) => (Math.abs(v) >= 1e6 ? `$${(v / 1e6).toFixed(1)}M` : `$${Math.round(v / 1e3)}K`);
+const BOUNDED = /^[\w &'.,()+/-]{1,80}$/;
 
-  if (!prompt) {
-    return NextResponse.json({ text: "" });
+async function insightPrompt(body: Record<string, unknown>): Promise<string | null> {
+  if (body.kind === "scorecard") {
+    const supplier = String(body.supplier ?? "");
+    if (!BOUNDED.test(supplier)) return null;
+    const d = await scorecard(supplier);
+    if (!d.summary.revenue) return null;
+    return `Generate a concise executive summary (3-4 sentences) for this vendor scorecard to share with ${supplier}:
+Revenue: ${aud(d.summary.revenue)} | Margin: ${d.summary.marginPct}% | Products: ${d.summary.products} | Transactions: ${d.summary.transactions.toLocaleString()}
+Category share: ${d.categoryShare.map((c) => `${c.category}: ${c.sharePct}%`).join(", ")}
+Top products by revenue: ${d.topProducts.slice(0, 3).map((p) => p.product).join(", ")}
+
+Focus on performance highlights, growth areas, and joint business planning opportunities. Write from the retailer (Baby Mart) perspective addressing the vendor. Use only the figures above.`;
   }
+  if (body.kind === "benchmarking") {
+    const category = String(body.category ?? "");
+    if (category && !BOUNDED.test(category)) return null;
+    const data = await benchmarking(category);
+    if (!data.length) return null;
+    return `You are a category analyst for Baby Mart. Analyze this vendor benchmarking data${category ? ` for ${category}` : " across all categories"}:
+${data.slice(0, 5).map((v) => `- ${v.supplier}: Revenue ${aud(v.revenue)}, Margin ${v.marginPct}%, Growth ${v.growthPct}%, Share ${v.sharePct}%`).join("\n")}
+Total vendors: ${data.length}
 
+Provide 3-4 bullet points: identify High Performers (high growth + high margin), Margin Leaders (low growth + high margin), Growth Potential vendors (high growth + low margin), and vendors Under Review. Recommend actions for vendor negotiations. Be specific with numbers, and use only the figures above.`;
+  }
+  return null;
+}
+
+async function handlePostInsights(request: NextRequest) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   try {
-    const escaped = prompt.replace(/'/g, "''");
-    const sql = `SELECT SNOWFLAKE.CORTEX.COMPLETE('claude-opus-4-7', '${escaped}') AS RESP`;
-    const rows = await querySnowflake(sql);
+    const prompt = await insightPrompt(body);
+    if (!prompt) return NextResponse.json({ error: "Ask for kind 'scorecard' with a supplier, or 'benchmarking' with an optional category." }, { status: 400 });
+    const rows = await querySnowflakeWithBinds(`SELECT SNOWFLAKE.CORTEX.COMPLETE('claude-opus-4-7', ?) AS RESP`, [prompt]);
     return NextResponse.json({
       text: rows[0] ? (rows[0] as Record<string, unknown>)["RESP"] : "",
     });

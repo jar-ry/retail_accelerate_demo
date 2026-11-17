@@ -1,4 +1,4 @@
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflake, querySnowflakeWithBinds } from "@/lib/snowflake";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -7,10 +7,12 @@ export async function GET(request: NextRequest) {
     const category = request.nextUrl.searchParams.get("category");
     const type = request.nextUrl.searchParams.get("type");
 
+    // Filters are BOUND, never spliced in: they come straight off the URL.
     const conditions: string[] = [];
-    if (segment && segment !== "All") conditions.push(`SEGMENT_NAME = '${segment.replace(/'/g, "''")}'`);
-    if (category && category !== "All") conditions.push(`CATEGORY = '${category.replace(/'/g, "''")}'`);
-    if (type && type !== "All") conditions.push(`RECOMMENDATION_TYPE = '${type.replace(/'/g, "''")}'`);
+    const binds: string[] = [];
+    if (segment && segment !== "All") { conditions.push(`SEGMENT_NAME = ?`); binds.push(segment); }
+    if (category && category !== "All") { conditions.push(`CATEGORY = ?`); binds.push(category); }
+    if (type && type !== "All") { conditions.push(`RECOMMENDATION_TYPE = ?`); binds.push(type); }
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const detailSql = `
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const [rows, segRows, typeRows, catTypeRows] = await Promise.all([
-      querySnowflake(detailSql),
+      binds.length ? querySnowflakeWithBinds(detailSql, binds) : querySnowflake(detailSql),
       querySnowflake(segSummarySql),
       querySnowflake(typeSummarySql),
       querySnowflake(catTypeSql),

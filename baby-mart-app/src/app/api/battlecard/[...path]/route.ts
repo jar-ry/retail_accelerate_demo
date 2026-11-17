@@ -10,8 +10,10 @@ import { NextRequest, NextResponse } from "next/server";
 // other brand, called COMPLETE with a prompt containing no data at all -- so
 // margins, DIFOT and dollar values were invented.
 
+// Snowflake string literals honour backslash escapes, so doubling quotes alone
+// lets a value ending in \' close the literal. Escape the backslash first.
 function sqlLiteral(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
 }
 
 export async function POST(request: NextRequest) {

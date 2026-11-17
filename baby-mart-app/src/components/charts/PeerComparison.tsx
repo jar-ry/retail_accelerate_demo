@@ -1,54 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { brandData, categories } from "../../data/brandConfig";
 
 import dynamic from "next/dynamic";
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 const COLORS = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
-const priorShareShifts: Record<string, number[]> = {
-  "Nappies & Wipes": [1.8, -2.4, 1.2, -0.4, -0.2],
-  "Prams & Strollers": [2.1, -3.2, 0.4, -0.6, 1.3],
-  "Car Seats": [-1.2, 0.8, -2.1, 0.6, 1.9],
-  "Clothing": [0.6, -1.8, 0.4, 0.2, 0.6],
-  "Feeding": [1.4, -0.8, -1.6, 0.4, 0.6],
+// Peers come from POS (/api/brand/{name}/overview): this year's and last year's
+// share of the category over the same 28 days. The previous version read the
+// hand-typed brandConfig and invented the prior period by nudging each share by a
+// hardcoded "shift".
+export type Peer = {
+  brand: string; revenue: number; growthPct: number | null; marginPct: number | null; sharePct: number | null;
+  shareLyPct: number | null; rosPerStoreWeek: number | null; difotPct: number | null;
 };
 
 interface Props {
   currentBrand: string;
   category: string;
+  peers: Peer[];
 }
 
-export default function PeerComparison({ currentBrand, category }: Props) {
-  const cat = categories.find((c) => c.name === category);
-  if (!cat) return null;
+const fmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(0)}`);
 
-  const peers = cat.brands.map((name) => brandData[name]).filter(Boolean);
-  const currentShares = peers.map((p) => parseFloat(p.share));
-  const shifts = priorShareShifts[category] || peers.map(() => 0);
-  const priorShares = currentShares.map((s, i) => Math.max(1, s + (shifts[i] || 0)));
-  const priorTotal = priorShares.reduce((a, b) => a + b, 0);
-  const normalizedPrior = priorShares.map((s) => (s / priorTotal) * 100);
-  const currentTotal = currentShares.reduce((a, b) => a + b, 0);
-  const normalizedCurrent = currentShares.map((s) => (s / currentTotal) * 100);
+export default function PeerComparison({ currentBrand, category, peers }: Props) {
+  if (!peers.length) return null;
 
   const traces = peers.map((p, i) => ({
     type: "bar" as const,
     orientation: "h" as const,
-    name: p.name,
-    x: [normalizedCurrent[i], normalizedPrior[i]],
-    y: ["Current (L7D)", "Prior Period"],
-    marker: { color: COLORS[i % COLORS.length], opacity: p.name === currentBrand ? 1 : 0.7 },
+    name: p.brand,
+    x: [p.sharePct ?? 0, p.shareLyPct ?? 0],
+    y: ["Last 28 days", "Same days LY"],
+    marker: { color: COLORS[i % COLORS.length], opacity: p.brand === currentBrand ? 1 : 0.7 },
     text: [
-      normalizedCurrent[i] > 8 ? `${p.name} ${normalizedCurrent[i].toFixed(0)}%` : "",
-      normalizedPrior[i] > 8 ? `${p.name} ${normalizedPrior[i].toFixed(0)}%` : "",
+      (p.sharePct ?? 0) > 8 ? `${p.brand} ${(p.sharePct ?? 0).toFixed(0)}%` : "",
+      (p.shareLyPct ?? 0) > 8 ? `${p.brand} ${(p.shareLyPct ?? 0).toFixed(0)}%` : "",
     ],
     textposition: "inside" as const,
     insidetextanchor: "middle" as const,
     textfont: { color: "white", size: 11 },
-    hovertemplate: `${p.name}: %{x:.1f}%<extra></extra>`,
+    hovertemplate: `${p.brand}: %{x:.1f}%<extra></extra>`,
   }));
 
   return (
@@ -62,7 +55,7 @@ export default function PeerComparison({ currentBrand, category }: Props) {
           layout={{
             barmode: "stack",
             height: 120,
-            margin: { l: 90, r: 20, t: 10, b: 20 },
+            margin: { l: 100, r: 20, t: 10, b: 20 },
             xaxis: { showticklabels: false, showgrid: false, zeroline: false, range: [0, 100] },
             yaxis: { automargin: true, tickfont: { size: 11 } },
             showlegend: false,
@@ -88,37 +81,28 @@ export default function PeerComparison({ currentBrand, category }: Props) {
             </tr>
           </thead>
           <tbody>
-            {peers
-              .sort((a, b) => parseFloat(b.share) - parseFloat(a.share))
-              .map((p) => {
-                const isCurrent = p.name === currentBrand;
-                const isGrowing = !p.growth.startsWith("-");
-                const difotVal = parseFloat(p.difot);
-                return (
-                  <tr
-                    key={p.name}
-                    className={`border-b border-slate-50 ${isCurrent ? "bg-blue-50 border-l-4 border-l-blue-600" : ""}`}
-                  >
-                    <td className={`py-2.5 ${isCurrent ? "font-bold text-blue-800 pl-2" : ""}`}>
-                      <Link href={`/brand/${encodeURIComponent(p.name)}`} className="hover:underline">
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td className="text-right font-mono">{p.revenue}</td>
-                    <td className={`text-right font-mono ${isGrowing ? "text-emerald-600" : "text-red-600"}`}>
-                      {p.growth}
-                    </td>
-                    <td className="text-right font-mono">{p.margin}</td>
-                    <td className="text-right font-mono font-semibold">{p.share}</td>
-                    <td className="text-right font-mono">{p.ros}</td>
-                    <td
-                      className={`text-right font-mono ${difotVal < 90 ? "text-red-600" : difotVal >= 95 ? "text-emerald-600" : ""}`}
-                    >
-                      {p.difot}
-                    </td>
-                  </tr>
-                );
-              })}
+            {peers.map((p) => {
+              const isCurrent = p.brand === currentBrand;
+              const isGrowing = (p.growthPct ?? 0) >= 0;
+              const d = p.difotPct;
+              return (
+                <tr key={p.brand} className={`border-b border-slate-50 ${isCurrent ? "bg-blue-50 border-l-4 border-l-blue-600" : ""}`}>
+                  <td className={`py-2.5 ${isCurrent ? "font-bold text-blue-800 pl-2" : ""}`}>
+                    <Link href={`/brand/${encodeURIComponent(p.brand)}`} className="hover:underline">{p.brand}</Link>
+                  </td>
+                  <td className="text-right font-mono">{fmt(p.revenue)}</td>
+                  <td className={`text-right font-mono ${isGrowing ? "text-emerald-600" : "text-red-600"}`}>
+                    {p.growthPct === null ? "—" : `${p.growthPct > 0 ? "+" : ""}${p.growthPct.toFixed(1)}%`}
+                  </td>
+                  <td className="text-right font-mono">{p.marginPct === null ? "—" : `${p.marginPct.toFixed(1)}%`}</td>
+                  <td className="text-right font-mono font-semibold">{p.sharePct === null ? "—" : `${p.sharePct.toFixed(1)}%`}</td>
+                  <td className="text-right font-mono">{p.rosPerStoreWeek === null ? "—" : p.rosPerStoreWeek.toFixed(1)}</td>
+                  <td className={`text-right font-mono ${d !== null && d < 90 ? "text-red-600" : d !== null && d >= 95 ? "text-emerald-600" : ""}`}>
+                    {d === null ? "—" : `${d.toFixed(1)}%`}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

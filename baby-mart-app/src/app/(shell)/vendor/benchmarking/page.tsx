@@ -24,14 +24,9 @@ export default function CategoryBenchmarkingPage() {
 
   const fetchInsights = async () => {
     setInsightLoading(true);
-    const top5 = data.slice(0, 5);
-    const prompt = `You are a category analyst for Baby Mart. Analyze this vendor benchmarking data${category ? ` for ${category}` : " across all categories"}:
-${top5.map((v) => `- ${v.supplier}: Revenue ${fmt(v.revenue)}, Margin ${v.marginPct}%, Growth ${v.growthPct}%, Share ${v.sharePct}%`).join("\n")}
-Total vendors: ${data.length}
-
-Provide 3-4 bullet points: identify High Performers (high growth + high margin), Margin Leaders (low growth + high margin), Growth Potential vendors (high growth + low margin), and vendors Under Review. Recommend actions for vendor negotiations. Be specific with numbers.`;
+    // The server loads the benchmarking figures and writes the prompt itself.
     try {
-      const res = await fetch("/api/vendor/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const res = await fetch("/api/vendor/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "benchmarking", category }) });
       const d = await res.json();
       setAiInsight(d.text || "");
     } catch {} finally { setInsightLoading(false); }

@@ -1,6 +1,7 @@
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflakeWithBinds } from "@/lib/snowflake";
 import { NextRequest, NextResponse } from "next/server";
 
+// The brand is BOUND, never spliced into the SQL: it comes straight off the URL.
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -10,12 +11,12 @@ export async function GET(request: NextRequest) {
       SELECT competitor_name, AVG(avg_competitor_price) as their_price,
              AVG(avg_our_price) as our_price, AVG(avg_price_gap_pct) as gap_pct
       FROM DT_COMPETITIVE_POSITION
-      WHERE brand_name = '${brand}' AND fiscal_year = 2026
+      WHERE brand_name = ? AND fiscal_year = 2026
       GROUP BY competitor_name
       ORDER BY gap_pct DESC
     `;
 
-    const rows = await querySnowflake(sql);
+    const rows = await querySnowflakeWithBinds(sql, [brand]);
     return NextResponse.json(rows);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

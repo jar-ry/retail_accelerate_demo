@@ -1,4 +1,4 @@
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflakeWithBinds } from "@/lib/snowflake";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -10,12 +10,13 @@ export async function GET(request: NextRequest) {
       SELECT brand_name, AVG(avg_clv) as avg_clv, SUM(customer_count) as customers,
              AVG(avg_transactions) as avg_txns
       FROM DT_CLV_BY_BRAND
-      WHERE category = '${category}'
+      WHERE category = ?
       GROUP BY brand_name
       ORDER BY avg_clv DESC
     `;
 
-    const rows = await querySnowflake(sql);
+    // The category is BOUND: it comes straight off the URL.
+    const rows = await querySnowflakeWithBinds(sql, [category]);
     return NextResponse.json(rows);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -10,7 +10,7 @@ import { S } from "./schema";
 import { q, NOW, type Row } from "./db";
 import { splitBlock, toolPayload, verifyAnswer, type BlockTag, type ToolResult } from "./agent-answer";
 
-export type AgentStage = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE";
+export type AgentStage = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE";
 export type AgentStep = { id: string; name: string; toolType: string; input: unknown; status?: string };
 
 const ID = /^[A-Za-z0-9_-]{1,40}$/;
@@ -23,11 +23,12 @@ export function agentStage(agentId: string, requested: unknown): AgentStage | nu
   if (agentId === "planInvestigator") return "PLAN_INVESTIGATE";
   if (agentId === "planBuilder") return "PLAN_BUILDER";
   if (agentId === "hopInvestigator") return "HOP_INVESTIGATE";
+  if (agentId === "brandInvestigator") return "BRAND_INVESTIGATE";
   return null;
 }
 
 export const tagFor = (stage: AgentStage): BlockTag =>
-  stage === "INVESTIGATE" || stage === "PLAN_INVESTIGATE" || stage === "HOP_INVESTIGATE" ? "rca" : stage === "IDEATION" ? "ideas" : stage === "PLAN_BUILDER" ? "scenario" : "campaign";
+  stage === "INVESTIGATE" || stage === "PLAN_INVESTIGATE" || stage === "HOP_INVESTIGATE" || stage === "BRAND_INVESTIGATE" ? "rca" : stage === "IDEATION" ? "ideas" : stage === "PLAN_BUILDER" ? "scenario" : "campaign";
 
 export async function logAgentRun(o: {
   stage: AgentStage; agentFqn: string; campaignId: unknown; question: string; text: string;

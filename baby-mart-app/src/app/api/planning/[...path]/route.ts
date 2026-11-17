@@ -33,8 +33,10 @@ import {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Snowflake string literals honour backslash escapes, so doubling quotes alone
+// lets a value ending in \' close the literal. Escape the backslash first.
 function escapeSql(s: string): string {
-  return s.replace(/'/g, "''");
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
 function num(v: unknown): number {

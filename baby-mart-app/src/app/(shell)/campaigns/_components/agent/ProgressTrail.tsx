@@ -34,6 +34,9 @@ const TOOL_META: Record<string, Meta> = {
   TestStoreHypothesis: { icon: FlaskConical, label: "Tool · Test a cause of the LFL gap" },
   ChainEvidence: { icon: Database, label: "Tool · Planning chain evidence pack" },
   TestChainGap: { icon: FlaskConical, label: "Tool · Test a cause of the chain gap" },
+  BrandEvidence: { icon: Database, label: "Tool · Brand evidence pack (POS)" },
+  TestBrandHypothesis: { icon: FlaskConical, label: "Tool · Test a cause of the brand's move" },
+  CheckReportedDemand: { icon: ShieldCheck, label: "Tool · Reported demand vs POS" },
   system_execute_sql: { icon: Database, label: "Running the query" },
   data_to_chart: { icon: BarChart3, label: "Building a chart" },
 };
@@ -66,6 +69,8 @@ export function describeInput(name: string, input: unknown): string {
   if (name === "StoreEvidence") return String(o.SCOPE ?? "");
   if (name === "TestStoreHypothesis") return `${o.SCOPE} · split by ${String(o.DIMENSION)}`;
   if (name === "TestChainGap") return `${o.NODE} · split by ${String(o.DIMENSION)}`;
+  if (name === "BrandEvidence" || name === "CheckReportedDemand") return [o.BRAND, o.CLASS].filter(Boolean).join(" · ");
+  if (name === "TestBrandHypothesis") return `${[o.BRAND, o.CLASS].filter(Boolean).join(" ")} · split by ${String(o.DIMENSION)}`;
   if (name === "CheckCampaignGuardrails") return [o.CATEGORY, o.BRAND || "no brand", o.START_DATE && `${o.START_DATE} → ${o.END_DATE}`].filter(Boolean).join(" · ");
   if (name === "EstimateLift") return [o.CATEGORY || "all categories", o.CHANNELS, o.RECENCY_BAND].filter(Boolean).join(" · ");
   if (name === "SizeAudience" || name === "CreateCampaignDraft") {
