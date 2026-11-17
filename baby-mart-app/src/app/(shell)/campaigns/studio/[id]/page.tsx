@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Sparkles, Loader2, CheckCircle2, XCircle, Rocket, Route, Pencil, Mail, MessageSquare, Bell, Share2, Store } from "lucide-react";
 import { PageHeader, Card, Loading, ErrorState, Th, Td, Pill, Banner, Button, Modal, Field, inputCls } from "../../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../../_components/useCmp";
@@ -17,8 +17,9 @@ type Qa = { checks: Check[]; judge: { brand_voice: number; claims_risk: string; 
 
 const QA_TONE: Record<string, "green" | "amber" | "red"> = { PASS: "green", WARN: "amber", BLOCK: "red" };
 
-export default function StudioPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function StudioPage() {
+  // Next 14 passes params as a plain object, which React 18 use() rejects.
+  const id = String(useParams<{ id: string }>().id);
   const router = useRouter();
   const { data, isLoading, error } = useCmp<Studio>("studio", { id });
   const gen = useCmpAction("studio/generate");

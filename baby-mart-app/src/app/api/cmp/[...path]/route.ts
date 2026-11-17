@@ -3,7 +3,7 @@ import { CmpError } from "@/lib/campaign/db";
 import { sessionUser } from "@/lib/hop/session";
 import { getOverview, getSettings, postSettings, getOffers, getFindings } from "@/lib/campaign/handlers/overview";
 import { getIdeas, ideasFromRun, decideIdea } from "@/lib/campaign/handlers/ideas";
-import { getAudiences, sizeAudience, saveAudience, lockAudience, audienceFromText } from "@/lib/campaign/handlers/audiences";
+import { getAudiences, sizeAudience, saveAudience, lockAudience, audienceFromText, draftFromProposal } from "@/lib/campaign/handlers/audiences";
 import {
   getCampaigns, getCampaign, saveBrief, transition, simulate, alertAction, getInvestigation, publishLearnings, getLearnings,
 } from "@/lib/campaign/handlers/campaigns";
@@ -44,6 +44,7 @@ const POSTS: Record<string, (body: unknown, user: string) => Promise<unknown>> =
   "ideas/decide": decideIdea,
   "audiences/size": (body) => sizeAudience(body),
   "audiences/nl": audienceFromText,
+  "builder/draft": draftFromProposal,
   "audiences/save": saveAudience,
   "audiences/lock": lockAudience,
   brief: saveBrief,

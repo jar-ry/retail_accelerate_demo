@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowRight, CheckCircle2, Loader2, Megaphone, Target, XCircle, AlertTriangle, ShieldCheck, ShieldAlert } from "lucide-react";
 import { splitBlock, type BlockTag } from "@/lib/campaign/agent-answer";
 import { Card, Pill, Banner } from "../ui";
+import { useCmpAction } from "../useCmp";
 import VegaChart, { chartTitle } from "./VegaChart";
 import type { Turn, RunInfo } from "./useAgentRun";
 
@@ -172,14 +175,41 @@ export function CampaignCard({ c, run }: { c: CampaignBlock; run?: RunInfo }) {
           ))}
         </ul>
       ) : null}
-      {c.draft?.campaign_id && (
+      {c.draft?.campaign_id ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href={`/campaigns/audiences?campaign=${encodeURIComponent(c.draft.campaign_id)}`}
             className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-amber-700">
             Review and lock the audience <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
-      )}
+      ) : <SaveProposal c={c} />}
+    </div>
+  );
+}
+
+/** The proposal's next step: save it as a brief with a draft audience (sized
+ *  again on the server) and carry on in the Audience builder. */
+function SaveProposal({ c }: { c: CampaignBlock }) {
+  const router = useRouter();
+  const save = useCmpAction<{ campaignId: string; finalAudience: number; startDate: string; endDate: string }>("builder/draft");
+  const [err, setErr] = useState<string | null>(null);
+  if (!c.audience?.spec) return null;
+  const go = async () => {
+    setErr(null);
+    const r = await save.run({ proposal: c });
+    if (!r.ok) return setErr(r.error);
+    router.push(`/campaigns/audiences?campaign=${encodeURIComponent(r.data.campaignId)}`);
+  };
+  return (
+    <div className="mt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={go} disabled={save.busy}
+          className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60">
+          {save.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Create the draft and build the audience <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+        <span className="text-[10px] text-slate-500">Saves a brief and its audience. You lock the audience, approve the copy and launch.</span>
+      </div>
+      {err && <div className="mt-2"><Banner tone="error">{err}</Banner></div>}
     </div>
   );
 }

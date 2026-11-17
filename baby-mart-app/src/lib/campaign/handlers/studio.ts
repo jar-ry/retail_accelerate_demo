@@ -196,7 +196,7 @@ List every number you use in figures_cited. Respond in JSON.`;
     figures: supplied, cited: (x) => x.variants.flatMap((v) => v.figures_cited ?? []),
     prose: (x) => x.variants.flatMap((v) => [v.subject, v.preheader, v.body, v.sms, v.push_title, v.push_body, v.social, v.instore]), maxTokens: 5000,
   });
-  const variants = r.result.variants.filter((v) => v.code === "A" || v.code === "B").slice(0, 2);
+  const variants = await tighten(r.result.variants.filter((v) => v.code === "A" || v.code === "B").slice(0, 2), cid, user, supplied);
   if (!variants.length) throw new CmpError(502, "The model returned no usable variants.");
   await tx(async (run) => {
     await run(`DELETE FROM ${S}.CONTENT_VARIANT WHERE CAMPAIGN_ID = ? AND STATUS <> 'APPROVED'`, [cid]);
@@ -215,6 +215,57 @@ List every number you use in figures_cited. Respond in JSON.`;
   // The judge runs after the copy is saved, so a slow judge never loses the copy.
   for (const v of variants) await runJudge(`${cid}-${v.code}`, user, supplied);
   return { ok: true, runId: r.runId, verified: r.verified };
+}
+
+/** Character limits per short channel, the same ones QA blocks on. */
+const SHORT_LIMITS: [keyof Copy, number][] = [
+  ["subject", SUBJECT_MAX], ["sms", SMS_MAX], ["push_title", PUSH_TITLE_MAX], ["push_body", PUSH_BODY_MAX], ["social", SOCIAL_MAX], ["instore", INSTORE_MAX],
+];
+
+const TIGHTEN_FORMAT = `{
+  'type': 'json',
+  'schema': {'type': 'object', 'properties': {'fixes': {'type': 'array', 'items': {'type': 'object',
+    'properties': {'code': {'type': 'string'}, 'field': {'type': 'string'}, 'text': {'type': 'string'}}, 'required': ['code', 'field', 'text']}}},
+    'required': ['fixes']}
+}`;
+
+/** Models count characters badly, so copy often runs over a channel's limit and
+ *  QA blocks it. One rewrite pass shortens only the fields that are over, keeping
+ *  every fact and price; anything still too long is cut at a word boundary
+ *  (SMS keeps its opt-out). QA then checks the result as usual. */
+async function tighten(variants: Copy[], cid: string, user: string, supplied: unknown): Promise<Copy[]> {
+  const over = variants.flatMap((v) => SHORT_LIMITS.filter(([f, max]) => String(v[f] ?? "").length > max)
+    .map(([f, max]) => ({ code: v.code, field: f, max, text: String(v[f]) })));
+  if (!over.length) return variants;
+  try {
+    const r = await runGrounded<{ fixes: { code: string; field: string; text: string }[] }>({
+      stage: "CONTENT", campaignId: cid, templateKey: `TIGHTEN_v${DOCTRINE_VERSION}`, responseFormatSql: TIGHTEN_FORMAT, user, maxTokens: 1500,
+      model: "claude-haiku-4-5", figures: supplied, prose: (x) => x.fixes.map((f) => f.text),
+      prompt: `Shorten each Baby Mart marketing text to fit its character limit, with a safety margin of about 10 characters.
+Keep the meaning, every price and number exactly as written, the {first_name} and {home_store} tokens if present, and Australian English.
+An sms must still start "Baby Mart:" and end "Opt out: reply STOP". Do not add anything new.
+
+${JSON.stringify(over)}
+
+Return one fix per item, with the same code and field. Respond in JSON.`,
+    });
+    for (const f of r.result.fixes ?? []) {
+      const v = variants.find((x) => x.code === f.code);
+      if (v && SHORT_LIMITS.some(([k]) => k === f.field) && f.text) (v as Record<string, unknown>)[f.field] = f.text;
+    }
+  } catch {
+    // Fall through to the hard cut below.
+  }
+  for (const v of variants) {
+    for (const [f, max] of SHORT_LIMITS) {
+      const s = String(v[f] ?? "");
+      if (s.length <= max) continue;
+      const tail = f === "sms" && /opt out: reply stop/i.test(s) ? " Opt out: reply STOP" : "";
+      const head = (tail ? s.replace(/\s*opt out: reply stop\.?\s*$/i, "") : s).slice(0, max - tail.length);
+      (v as Record<string, unknown>)[f] = head.replace(/\s+\S*$/, "").replace(/[\s,;:—-]+$/, "") + tail;
+    }
+  }
+  return variants;
 }
 
 async function runJudge(vid: string, user: string, supplied?: unknown) {

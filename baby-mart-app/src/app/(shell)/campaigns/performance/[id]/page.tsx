@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FastForward, Pause, Play, Search, Loader2, BookOpen, AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Th, Td, Pill, Banner, Button, Modal, Field, inputCls } from "../../_components/ui";
@@ -32,8 +33,9 @@ type Detail = {
   daily: Row[]; replies: Row[]; replySamples: Row[]; negReplyShare: number | null; content: Row[]; plan: Row[]; members: Row[];
 };
 
-export default function CampaignPerformancePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function CampaignPerformancePage() {
+  // Next 14 passes params as a plain object, which React 18 use() rejects.
+  const id = String(useParams<{ id: string }>().id);
   const { data, isLoading, error } = useCmp<Detail>("campaign", { id });
   const sim = useCmpAction<{ through: string; completed: boolean }>("simulate");
   const act = useCmpAction<{ actionTaken: string }>("alerts/action");

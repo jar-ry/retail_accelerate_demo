@@ -15,7 +15,7 @@ import { audienceSql, sizingStatements, sizingResult } from "../audience-core";
 import { cellsFrom, quadrantForCell, type UpliftCells } from "../measure";
 import { FIELDS, CHANNELS, PERSONAL_CHANNELS, type Quadrant } from "../config";
 import { runGrounded } from "../ai";
-import { toNum } from "../format";
+import { toNum, isoDate } from "../format";
 
 const n = (v: unknown) => toNum(v) ?? 0;
 
@@ -221,4 +221,44 @@ Respond in JSON.`;
     throw new CmpError(422, `The model proposed a filter that is not allowed: ${(e as Error).message} Try rephrasing.`);
   }
   return { spec: sp, explanation: r.result.explanation, runId: r.runId };
+}
+
+/** A Campaign Builder proposal saved as a BRIEF with its DRAFT audience, so the
+ *  person can carry it into the Audience builder, Studio and launch. The spec is
+ *  re-validated and re-sized here: the card is the agent's, the counts are ours. */
+export async function draftFromProposal(body: unknown, user: string) {
+  const b = ((body as { proposal?: unknown })?.proposal ?? {}) as Record<string, unknown>;
+  const txt = (v: unknown, max: number) => (v === undefined || v === null || v === "" ? null : String(v).slice(0, max));
+  const name = txt(b.name, 200);
+  if (!name) throw new CmpError(400, "The proposal has no name.");
+  const aud = (b.audience ?? {}) as { spec?: unknown; description?: unknown };
+  const sp = spec(aud.spec);
+  const [asOfRow] = await q(SQL.SQL_AS_OF);
+  const asOf = isoDate(asOfRow?.AS_OF) ?? new Date().toISOString().slice(0, 10);
+  const iso = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  // An agent date in the past (or missing) moves to the week after the data ends.
+  const addDays = (d: string, k: number) => new Date(Date.parse(`${d}T00:00:00Z`) + k * 864e5).toISOString().slice(0, 10);
+  const start = iso(b.start_date) && iso(b.start_date)! > asOf ? iso(b.start_date)! : addDays(asOf, 7);
+  const end = iso(b.end_date) && iso(b.end_date)! >= start ? iso(b.end_date)! : addDays(start, 27);
+  const budget = Math.min(100000, Math.max(1, Number(b.budget_aud) || 5000));
+  const offerId = txt(b.offer_id, 20);
+  if (offerId && !(await q(`SELECT 1 FROM ${S}.OFFER WHERE OFFER_ID = ? AND IS_ACTIVE`, [offerId])).length) throw new CmpError(400, `${offerId} is not an active offer.`);
+  const sized = await sizeAudience({ spec: sp });
+  const stamp = Date.now().toString(36);
+  const cid = `camp-${stamp}`, aid = `aud-${stamp}`;
+  const specJson = JSON.stringify(sp);
+  await tx(async (run) => {
+    await run(`INSERT INTO ${S}.CAMPAIGN (CAMPAIGN_ID, NAME, OBJECTIVE, HYPOTHESIS, STATUS, PROMOTED_CATEGORY, PROMOTED_CLASS, PROMOTED_BRAND, OFFER_ID,
+                 CHANNELS, BUDGET_AUD, START_DATE, END_DATE, HOLDOUT_PCT, PROVENANCE, AUDIENCE_ID, CREATED_BY, CREATED_AT)
+               SELECT ?, ?, ?, ?, 'BRIEF', ?, ?, ?, ?, PARSE_JSON(?), ?, ?::DATE, ?::DATE,
+                      (SELECT TRY_TO_NUMBER(SETTING_VALUE) FROM ${S}.CMP_SETTING WHERE SETTING_KEY = 'HOLDOUT_PCT'), 'APP', ?, ?, ${NOW}`,
+      [cid, name, txt(b.objective, 500), txt(b.hypothesis, 800), sp.promoted.category, sp.promoted.className, sp.promoted.brand, offerId,
+        JSON.stringify(sp.channels), budget, start, end, aid, user]);
+    await run(`INSERT INTO ${S}.AUDIENCE (AUDIENCE_ID, NAME, DESCRIPTION, SPEC, SPEC_HASH, VERSION, SOURCE, SIZE_AT_SAVE, REACHABLE_AT_SAVE, STATUS, CAMPAIGN_ID, CREATED_BY, CREATED_AT)
+               SELECT ?, ?, ?, PARSE_JSON(?), SHA2(?, 256), 1, 'AGENT', ?, ?, 'DRAFT', ?, ?, ${NOW}`,
+      [aid, `${name.slice(0, 100)} - audience`, txt(aud.description, 500) ?? describeSpec(sp), specJson, specJson,
+        sized.funnel.matched, sized.funnel.final, cid, user]);
+    await run(`INSERT INTO ${S}.CAMPAIGN_STATUS_LOG SELECT ?, NULL, 'BRIEF', 'Saved from a Campaign Builder proposal.', ?, ${NOW}`, [cid, user]);
+  });
+  return { ok: true, campaignId: cid, audienceId: aid, finalAudience: sized.funnel.final, startDate: start, endDate: end };
 }
