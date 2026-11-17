@@ -23,6 +23,13 @@ const TOOL_META: Record<string, Meta> = {
   CreateCampaignDraft: { icon: PenLine, label: "Tool · Create the draft brief" },
   CampaignEvidence: { icon: Database, label: "Tool · Campaign evidence pack" },
   TestHypothesis: { icon: FlaskConical, label: "Tool · Test a hypothesis" },
+  PlanEvidence: { icon: Database, label: "Tool · Plan evidence pack" },
+  TestPlanHypothesis: { icon: FlaskConical, label: "Tool · Test a cause of the gap" },
+  PlanData: { icon: Sigma, label: "Cortex Analyst · Merchandise plan" },
+  OptionSearch: { icon: Search, label: "Cortex Search · Option range" },
+  GoalSeek: { icon: FlaskConical, label: "Solver · Goal seek GP (draft scenarios)" },
+  RangeCut: { icon: PenLine, label: "Solver · Range rationalisation (draft scenario)" },
+  ScenarioReview: { icon: ShieldCheck, label: "Tool · Scenario impact and guardrails" },
   system_execute_sql: { icon: Database, label: "Running the query" },
   data_to_chart: { icon: BarChart3, label: "Building a chart" },
 };
@@ -47,6 +54,11 @@ export function describeInput(name: string, input: unknown): string {
   if (o.pruning_question) return String(o.pruning_question);
   if (name === "TestHypothesis") return `${o.CAMPAIGN_ID} · split by ${String(o.DIMENSION)}`;
   if (name === "CampaignEvidence") return String(o.CAMPAIGN_ID ?? "");
+  if (name === "PlanEvidence") return String(o.NODE ?? "");
+  if (name === "TestPlanHypothesis") return `${o.NODE} · split by ${String(o.DIMENSION)}`;
+  if (name === "GoalSeek") return [o.NODE, typeof o.TARGET_GP_PHP === "number" ? `PHP ${(o.TARGET_GP_PHP / 1e6).toFixed(1)}M GP` : null, o.HALF].filter(Boolean).join(" · ");
+  if (name === "RangeCut") return [o.CLASS_NAME, o.BOTTOM_PCT ? `bottom ${o.BOTTOM_PCT}%` : null, o.HALF].filter(Boolean).join(" · ");
+  if (name === "ScenarioReview") return String(o.SCENARIO_ID ?? "");
   if (name === "CheckCampaignGuardrails") return [o.CATEGORY, o.BRAND || "no brand", o.START_DATE && `${o.START_DATE} → ${o.END_DATE}`].filter(Boolean).join(" · ");
   if (name === "EstimateLift") return [o.CATEGORY || "all categories", o.CHANNELS, o.RECENCY_BAND].filter(Boolean).join(" · ");
   if (name === "SizeAudience" || name === "CreateCampaignDraft") {

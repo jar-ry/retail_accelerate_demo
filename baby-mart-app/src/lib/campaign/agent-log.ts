@@ -10,18 +10,23 @@ import { S } from "./schema";
 import { q, NOW, type Row } from "./db";
 import { splitBlock, toolPayload, verifyAnswer, type BlockTag, type ToolResult } from "./agent-answer";
 
-export type AgentStage = "BUILDER" | "IDEATION" | "INVESTIGATE";
+export type AgentStage = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER";
 export type AgentStep = { id: string; name: string; toolType: string; input: unknown; status?: string };
 
 const ID = /^[A-Za-z0-9_-]{1,40}$/;
 
+// The planning agents (agent/deploy_plan_agents.sql) are logged here too, so
+// every agent answer in the app is verified and recorded the same way.
 export function agentStage(agentId: string, requested: unknown): AgentStage | null {
   if (agentId === "campaignInvestigator") return "INVESTIGATE";
   if (agentId === "campaignBuilder") return requested === "IDEATION" ? "IDEATION" : "BUILDER";
+  if (agentId === "planInvestigator") return "PLAN_INVESTIGATE";
+  if (agentId === "planBuilder") return "PLAN_BUILDER";
   return null;
 }
 
-export const tagFor = (stage: AgentStage): BlockTag => (stage === "INVESTIGATE" ? "rca" : stage === "IDEATION" ? "ideas" : "campaign");
+export const tagFor = (stage: AgentStage): BlockTag =>
+  stage === "INVESTIGATE" || stage === "PLAN_INVESTIGATE" ? "rca" : stage === "IDEATION" ? "ideas" : stage === "PLAN_BUILDER" ? "scenario" : "campaign";
 
 export async function logAgentRun(o: {
   stage: AgentStage; agentFqn: string; campaignId: unknown; question: string; text: string;

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { AlertTriangle, TrendingUp, TrendingDown, Boxes, ArrowRight } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Boxes, ArrowRight, Bot } from "lucide-react";
 import {
   PageHeader, KpiCard, Card, CurrencyToggle, SeverityPill, StrategyPill,
   Loading, ErrorState, Th, Td,
@@ -95,8 +95,8 @@ export default function PlanningDashboard() {
           title="Proactive insights"
           subtitle="Detected in SQL against fixed thresholds, so the same review returns the same findings"
           right={
-            <Link href="/planning/insights" className="text-xs font-medium text-violet-700 hover:underline">
-              AI analysis →
+            <Link href="/planning/investigate" className="text-xs font-medium text-violet-700 hover:underline">
+              Plan Investigator →
             </Link>
           }
           className="col-span-1"
@@ -107,11 +107,12 @@ export default function PlanningDashboard() {
             )}
             {data.exceptions.map((e, i) => {
               const Icon = EXCEPTION_ICON[e.type] ?? AlertTriangle;
+              const why = ["SALES_RISK", "SALES_OPPORTUNITY", "MARGIN_EROSION"].includes(e.type) && (e.planLevel === "DEPARTMENT" || e.planLevel === "CLASS" || e.planLevel === "RBU");
               return (
+                <div key={`${e.type}-${e.node}-${i}`} className="border border-slate-200 rounded-lg hover:border-violet-300 hover:bg-violet-50/40">
                 <Link
-                  key={`${e.type}-${e.node}-${i}`}
                   href={exceptionHref(e)}
-                  className="block border border-slate-200 rounded-lg p-2.5 hover:border-violet-300 hover:bg-violet-50/40"
+                  className="block p-2.5"
                 >
                   <div className="flex items-start gap-2">
                     <Icon
@@ -130,6 +131,13 @@ export default function PlanningDashboard() {
                     </div>
                   </div>
                 </Link>
+                {why && (
+                  <Link href={`/planning/investigate?node=${encodeURIComponent(e.node)}${e.type === "SALES_OPPORTUNITY" ? "&ahead=1" : ""}`}
+                    className="flex items-center gap-1 border-t border-slate-100 px-2.5 py-1 text-[11px] font-medium text-violet-700 hover:underline">
+                    <Bot className="w-3 h-3" />Investigate why <ArrowRight className="w-3 h-3" />
+                  </Link>
+                )}
+                </div>
               );
             })}
           </div>

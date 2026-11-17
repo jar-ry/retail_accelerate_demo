@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { ChevronRight, Lightbulb } from "lucide-react";
+import { Bot, ChevronRight, Lightbulb } from "lucide-react";
 import {
   Breadcrumb, PageHeader, KpiCard, Card, CurrencyToggle, StrategyPill,
   Loading, ErrorState, Th, Td,
@@ -57,8 +57,14 @@ export default function MfpDepartmentPage() {
         right={
           <>
             <Link
-              href={`/planning/insights?level=DEPARTMENT&node=${encodeURIComponent(department)}`}
+              href={`/planning/investigate?node=${encodeURIComponent(department)}${(t.varToBudPct ?? 0) > 0 ? "&ahead=1" : ""}`}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-violet-600 text-white hover:bg-violet-700"
+            >
+              <Bot className="w-3.5 h-3.5" /> Investigate the gap
+            </Link>
+            <Link
+              href={`/planning/insights?level=DEPARTMENT&node=${encodeURIComponent(department)}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-violet-300 text-violet-700 hover:bg-violet-50"
             >
               <Lightbulb className="w-3.5 h-3.5" /> AI insights
             </Link>

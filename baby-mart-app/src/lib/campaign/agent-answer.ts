@@ -9,7 +9,7 @@
 
 import { verifyCitations } from "../ai/grounded";
 
-export type BlockTag = "campaign" | "ideas" | "rca";
+export type BlockTag = "campaign" | "ideas" | "rca" | "scenario";
 
 export type Split<T> = {
   /** Text before the block: the agent sometimes narrates ("Now the charts.") first. */
@@ -86,6 +86,17 @@ function citedAndProse(tag: BlockTag, block: unknown): { cited: string[]; prose:
     prose.push(String(b.headline ?? ""), String(b.impact ?? ""), String(b.learning ?? ""), ...strs(b.causal_chain), ...strs(b.ruled_out));
     for (const h of (Array.isArray(b.hypotheses) ? b.hypotheses : []) as Rec[]) prose.push(String(h.evidence ?? ""));
     for (const a of (Array.isArray(b.actions) ? b.actions : []) as Rec[]) prose.push(String(a.action ?? ""));
+  } else if (tag === "scenario") {
+    // A scenario's deltas are money (or points, for the GP rate), written as raw
+    // numbers the card formats, so they are checked as such.
+    prose.push(String(b.goal ?? ""), String(b.rationale ?? ""));
+    if (typeof b.target_gp_php === "number") cited.push(`PHP ${b.target_gp_php}`);
+    for (const o of (Array.isArray(b.options) ? b.options : []) as Rec[]) {
+      for (const k of ["sales_delta_php", "gp_delta_php", "stock_delta_php"]) if (typeof o[k] === "number") cited.push(`PHP ${o[k]}`);
+      if (typeof o.gp_rate_delta_pp === "number") cited.push(`${o.gp_rate_delta_pp} pp`);
+      prose.push(String(o.label ?? ""), String(o.binding_assumption ?? ""));
+      for (const g of (Array.isArray(o.guardrails) ? o.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
+    }
   } else {
     const exp = (b.expected ?? {}) as Rec;
     prose.push(String(b.objective ?? ""), String(b.hypothesis ?? ""), String(exp.basis ?? ""));

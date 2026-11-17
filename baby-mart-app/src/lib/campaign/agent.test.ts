@@ -61,6 +61,63 @@ describe("agent answer blocks", () => {
   });
 });
 
+// Recorded runs of the Global Planning agents on canonical (agent/deploy_plan_agents.sql):
+// the investigator on PRAMS & STROLLERS, the builder on a PHP 2M goal seek and on
+// an open-ended "behind budget and overbought" request.
+describe("planning agent answers", () => {
+  it("verifies every PHP figure the planning agents wrote against their tools", () => {
+    for (const [name, tag] of [["plan_inv_prams", "rca"], ["plan_build_single", "scenario"], ["plan_build_prams", "scenario"]] as const) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, tag);
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer(tag, s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("finds the budget set above demand and rules out a class, month or supplier", () => {
+    const b = splitBlock<{ headline: string; hypotheses: { hypothesis: string; verdict: string }[]; actions: { scenario_prompt?: string | null }[] }>(
+      fixture("plan_inv_prams").text, "rca").block!;
+    expect(b.headline).toMatch(/budget/i);
+    const verdict = (re: RegExp) => b.hypotheses.find((h) => re.test(h.hypothesis))?.verdict;
+    expect(verdict(/budget/i)).toBe("CONFIRMED");
+    expect(verdict(/class/i)).toBe("RULED_OUT");
+    expect(verdict(/supplier/i)).toBe("RULED_OUT");
+    expect(b.actions.some((a) => a.scenario_prompt)).toBe(true);
+  });
+
+  it("blocks the price option the solver cannot reach and recommends one that can", () => {
+    const b = splitBlock<{ options: { scenario_id: string; achievable: boolean; guardrails: { level: string }[] }[]; recommended: string }>(
+      fixture("plan_build_single").text, "scenario").block!;
+    const price = b.options.find((o) => o.achievable === false)!;
+    expect(price.guardrails.some((g) => g.level === "BLOCK")).toBe(true);
+    expect(b.recommended).not.toBe(price.scenario_id);
+    expect(b.options.map((o) => o.scenario_id)).toContain(b.recommended);
+  });
+
+  it("flags an invented peso amount", () => {
+    const f = fixture("plan_build_single");
+    const s = splitBlock(f.text, "scenario");
+    const v = verifyAnswer("scenario", s.block, `${s.after}\nThis also frees PHP 777.7M of open-to-buy.`, results(f), f.question);
+    expect(v.verified).toBe(false);
+    expect(v.unmatched).toEqual(["prose: PHP 777.7M"]);
+  });
+
+  it("reads an abbreviated scenario id as a code, not a figure", () => {
+    const f = fixture("plan_build_single");
+    const s = splitBlock(f.text, "scenario");
+    const v = verifyAnswer("scenario", s.block, `${s.after}\nGo with 2b (SCN-59fb…9441).`, results(f), f.question);
+    expect(v.unmatched).toEqual([]);
+  });
+
+  it("describes the planning tools' steps in words", () => {
+    expect(describeInput("TestPlanHypothesis", { NODE: "PRAMS & STROLLERS", DIMENSION: "traded" })).toBe("PRAMS & STROLLERS · split by traded");
+    expect(describeInput("GoalSeek", { NODE: "SINGLE STROLLER", TARGET_GP_PHP: 2000000, HALF: "H2" })).toBe("SINGLE STROLLER · PHP 2.0M GP · H2");
+    expect(describeInput("RangeCut", { CLASS_NAME: "TRAVEL SYSTEM", BOTTOM_PCT: 25, HALF: "H2" })).toBe("TRAVEL SYSTEM · bottom 25% · H2");
+  });
+});
+
 describe("progress trail", () => {
   it("turns the recorded stream into steps that each finish", () => {
     const f = fixture("inv_001");

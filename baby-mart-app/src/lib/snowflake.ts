@@ -118,6 +118,18 @@ export const AGENTS = {
     label: "Campaign Investigator",
     fqn: `${process.env.CAMPAIGN_SCHEMA?.trim() || `${DB}.CAMPAIGN`}.CAMPAIGN_INVESTIGATOR_AGENT`,
   },
+  // Global Planning's investigator and scenario builder (agent/deploy_plan_agents.sql),
+  // beside the merch agent in the AI schema.
+  planInvestigator: {
+    id: "planInvestigator",
+    label: "Plan Investigator",
+    fqn: `${DB}.${SCHEMA_AI}.PLAN_INVESTIGATOR_AGENT`,
+  },
+  planBuilder: {
+    id: "planBuilder",
+    label: "Scenario Builder",
+    fqn: `${DB}.${SCHEMA_AI}.PLAN_BUILDER_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

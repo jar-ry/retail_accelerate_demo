@@ -35,7 +35,14 @@ export type CampaignBlock = {
 export type RcaBlock = {
   headline: string; confidence: string; causal_chain?: string[]; key_evidence?: Evidence[];
   hypotheses?: { hypothesis: string; verdict: string; evidence: string }[];
-  ruled_out?: string[]; impact?: string; actions?: { owner: string; action: string }[]; learning?: string;
+  ruled_out?: string[]; impact?: string; actions?: { owner: string; action: string; scenario_prompt?: string | null }[]; learning?: string;
+};
+
+export type ScenarioBlock = {
+  goal: string; node?: string; half?: string; target_gp_php?: number | null;
+  options?: { scenario_id: string; label: string; sales_delta_php?: number; gp_delta_php?: number; gp_rate_delta_pp?: number;
+    stock_delta_php?: number; achievable?: boolean; binding_assumption?: string; guardrails?: Guardrail[] }[];
+  recommended?: string; rationale?: string; key_evidence?: Evidence[];
 };
 
 export type IdeaBlock = {
@@ -128,7 +135,14 @@ export function RcaBox({ rca, run }: { rca: RcaBlock; run?: RunInfo }) {
             {rca.actions?.map((a, i) => (
               <li key={i} className="flex gap-1.5 text-[11px] text-slate-700">
                 <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
-                <span><span className="font-semibold">{a.owner}:</span> {a.action}</span>
+                <span><span className="font-semibold">{a.owner}:</span> {a.action}
+                  {a.scenario_prompt ? (
+                    <Link href={`/planning/scenarios?builder=${encodeURIComponent(a.scenario_prompt)}`}
+                      className="ml-1 inline-flex items-center gap-0.5 font-medium text-violet-700 hover:underline">
+                      Run in Scenario Builder <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
@@ -140,6 +154,69 @@ export function RcaBox({ rca, run }: { rca: RcaBlock; run?: RunInfo }) {
 }
 
 const fmtN = (v: unknown) => (typeof v === "number" ? v.toLocaleString("en-AU", { maximumFractionDigits: 1 }) : "–");
+
+/** PHP 2.0M / PHP -469K, signed, the way the planning pages write money. */
+const fmtPhp = (v: unknown) => {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "–";
+  const a = Math.abs(v), s = v < 0 ? "−" : v > 0 ? "+" : "";
+  return a >= 1e6 ? `${s}PHP ${(a / 1e6).toFixed(1)}M` : a >= 1e3 ? `${s}PHP ${Math.round(a / 1e3)}K` : `${s}PHP ${Math.round(a)}`;
+};
+const G_TONE: Record<string, string> = { BLOCK: "text-red-700", CAUTION: "text-amber-800", PASS: "text-emerald-700" };
+
+/** The Scenario Builder's answer: each DRAFT it wrote, compared on sales, GP, GP
+ *  rate and stock, with its guardrails, and a link to that draft in the sandbox,
+ *  where a planner submits and approves it. */
+export function ScenarioCard({ s, run }: { s: ScenarioBlock; run?: RunInfo }) {
+  const opts = s.options ?? [];
+  return (
+    <div className="rounded-xl border border-violet-300 bg-gradient-to-br from-violet-50 via-white to-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="grid h-7 w-7 place-items-center rounded-lg bg-violet-100 text-violet-700"><Target className="h-4 w-4" /></span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-800">Scenario options</span>
+        <span className="ml-auto flex items-center gap-2"><RunBadge run={run} /><Pill tone="slate">{opts.length} draft{opts.length === 1 ? "" : "s"} in the sandbox</Pill></span>
+      </div>
+      <h2 className="mt-3 text-base font-semibold leading-snug text-slate-900">{s.goal}</h2>
+      <p className="mt-1 text-xs text-slate-600">{[s.node, s.half, s.target_gp_php ? `target ${fmtPhp(s.target_gp_php).replace("+", "")} GP` : null].filter(Boolean).join(" · ")}</p>
+      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full text-[11px]">
+          <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+            <tr><th className="px-2.5 py-1.5 text-left font-semibold">Option</th><th className="px-2.5 py-1.5 text-right font-semibold">Sales</th>
+              <th className="px-2.5 py-1.5 text-right font-semibold">GP</th><th className="px-2.5 py-1.5 text-right font-semibold">GP rate</th>
+              <th className="px-2.5 py-1.5 text-right font-semibold">Stock</th><th className="px-2.5 py-1.5 text-left font-semibold">Guardrails</th><th /></tr>
+          </thead>
+          <tbody>
+            {opts.map((o) => {
+              const rec = o.scenario_id === s.recommended;
+              return (
+                <tr key={o.scenario_id} className={`border-t border-slate-100 align-top ${rec ? "bg-violet-50/60" : ""}`}>
+                  <td className="px-2.5 py-1.5">
+                    <div className="font-medium text-slate-900">{o.label}{rec ? <> <Pill tone="green">recommended</Pill></> : null}{o.achievable === false ? <> <Pill tone="red">not achievable</Pill></> : null}</div>
+                    {o.binding_assumption && <div className="text-[10px] text-slate-500">{o.binding_assumption}</div>}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono">{fmtPhp(o.sales_delta_php)}</td>
+                  <td className="px-2.5 py-1.5 text-right font-mono font-semibold">{fmtPhp(o.gp_delta_php)}</td>
+                  <td className="px-2.5 py-1.5 text-right font-mono">{typeof o.gp_rate_delta_pp === "number" ? `${o.gp_rate_delta_pp > 0 ? "+" : ""}${o.gp_rate_delta_pp} pp` : "–"}</td>
+                  <td className="px-2.5 py-1.5 text-right font-mono">{fmtPhp(o.stock_delta_php)}</td>
+                  <td className="px-2.5 py-1.5">
+                    <ul className="space-y-0.5">{(o.guardrails ?? []).map((g, k) => <li key={k} className={G_TONE[g.level] ?? "text-slate-600"}><span className="font-semibold">{g.level.toLowerCase()}</span> {g.message}</li>)}</ul>
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right">
+                    <Link href={`/planning/scenarios?scenario=${encodeURIComponent(o.scenario_id)}`} className="inline-flex items-center gap-0.5 whitespace-nowrap font-medium text-violet-700 hover:underline">
+                      Open in sandbox <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {s.rationale && <p className="mt-3 text-xs text-slate-700"><span className="font-semibold text-slate-900">Why: </span>{s.rationale}</p>}
+      <div className="mt-4"><EvidenceGrid items={s.key_evidence} /></div>
+      <p className="mt-3 text-[10px] text-slate-500">These are drafts. Nothing changes the approved forecast until a planner submits and approves one on the Decisioning tab.</p>
+    </div>
+  );
+}
 
 export function CampaignCard({ c, run }: { c: CampaignBlock; run?: RunInfo }) {
   const e = c.expected ?? {};
@@ -254,7 +331,8 @@ export function AgentAnswer({ t, tag, card }: { t: Turn; tag: BlockTag; card?: (
   return (
     <div className="space-y-4">
       {s.block ? (
-        card ? card(s.block) : tag === "rca" ? <RcaBox rca={s.block as RcaBlock} run={t.run} /> : tag === "campaign" ? <CampaignCard c={s.block as CampaignBlock} run={t.run} /> : null
+        card ? card(s.block) : tag === "rca" ? <RcaBox rca={s.block as RcaBlock} run={t.run} /> : tag === "campaign" ? <CampaignCard c={s.block as CampaignBlock} run={t.run} />
+          : tag === "scenario" ? <ScenarioCard s={s.block as ScenarioBlock} run={t.run} /> : null
       ) : working ? (
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900">
           <Loader2 className="h-4 w-4 animate-spin" />

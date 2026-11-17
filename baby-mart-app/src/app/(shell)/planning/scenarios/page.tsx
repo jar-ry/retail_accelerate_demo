@@ -5,8 +5,9 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   RotateCcw, Sparkles, Trash2, CheckCircle2, XCircle, PencilLine,
-  Loader2, Grid3x3, Brain, AlertTriangle,
+  Loader2, Grid3x3, Brain, AlertTriangle, Bot,
 } from "lucide-react";
+import { AgentPanel } from "../../campaigns/_components/agent/AgentPanel";
 import {
   Breadcrumb, PageHeader, KpiCard, Card, CurrencyToggle,
   Loading, ErrorState, Th, Td,
@@ -135,10 +136,19 @@ const EXAMPLES = [
 ];
 
 const TABS = [
+  { id: "builder", label: "Scenario Builder", icon: Bot },
   { id: "prompt", label: "Prompt", icon: Sparkles },
   { id: "sandbox", label: "Sandbox", icon: Grid3x3 },
   { id: "decisioning", label: "Decisioning", icon: Brain },
 ] as const;
+
+// The Scenario Builder agent (agent/deploy_plan_agents.sql) runs the same solvers
+// as the Prompt tab, then compares the drafts and checks their guardrails.
+const BUILDER_SAMPLES = [
+  "Find PHP 2M of GP in H2 for SINGLE STROLLER and give me options",
+  "Rationalise the bottom 25% of TRAVEL SYSTEM in H2",
+  "PRAMS & STROLLERS is behind budget and overbought. What can we do in H2?",
+];
 
 const STATUS_STYLE: Record<string, string> = {
   DRAFT: "text-slate-700 bg-slate-100",
@@ -154,8 +164,20 @@ const REC_STYLE: Record<string, string> = {
 };
 
 export default function ScenariosPage() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("prompt");
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("builder");
   const [currency, setCurrency] = useState<Currency>("PHP");
+  // ?builder=<request> (the investigator's "Run in Scenario Builder") asks the
+  // agent on arrival; ?scenario=<id> (a builder card's "Open in sandbox") opens
+  // the sandbox with that draft highlighted. Read from window.location so the
+  // page needs no Suspense boundary.
+  const [builderAsk, setBuilderAsk] = useState<string | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const b = p.get("builder")?.slice(0, 500);
+    const sid = p.get("scenario");
+    if (b) setBuilderAsk(b);
+    else if (sid && /^SCN-[A-Za-z0-9]{8,40}$/.test(sid)) { setNewIds([sid]); setTab("sandbox"); }
+  }, []);
 
   // ─── Sandbox data ───────────────────────────────────────────────────────
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -286,6 +308,15 @@ export default function ScenariosPage() {
           );
         })}
       </div>
+
+      {/* ─── Scenario Builder tab: the agent ────────────────────────────── */}
+      {tab === "builder" && (
+        <Card title="Scenario Builder"
+          subtitle="Describe the goal. The agent sizes it against the plan, runs the goal-seek and range solvers as DRAFT scenarios, compares them on sales, GP, GP rate and stock, checks guardrails and recommends one. Every figure comes from the solvers and is checked against them. Nothing changes the approved forecast until you approve a draft on the Decisioning tab.">
+          <AgentPanel key={builderAsk ?? "builder"} agent="planBuilder" tag="scenario" stage="PLAN_BUILDER" samples={BUILDER_SAMPLES} autoAsk={builderAsk}
+            placeholder="e.g. find PHP 1.5M of GP in H2 for DOUBLE STROLLER without adding stock" onFinished={() => loadScenarios()} />
+        </Card>
+      )}
 
       {/* ─── Prompt tab: slide steps 1 and 2 ─────────────────────────── */}
       {tab === "prompt" && (

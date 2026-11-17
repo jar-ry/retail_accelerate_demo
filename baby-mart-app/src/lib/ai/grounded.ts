@@ -28,10 +28,11 @@ export type Figure = { raw: string; value: number; unit: Unit; decimals: number;
 const MONEY_SCALE: Record<string, number> = { k: 1e3, m: 1e6, mn: 1e6, b: 1e9, bn: 1e9 };
 
 /** Every number in a piece of text, with the unit and precision it is written at.
- *  A number glued to letters is part of a code -- FY27, S048, H1 -- not a figure. */
+ *  A number glued to letters is part of a code -- FY27, S048, H1 -- not a figure,
+ *  and so is one glued to an ellipsis: an abbreviated id like SCN-59fb…9441. */
 export function extractFigures(text: string): Figure[] {
   const out: Figure[] = [];
-  const re = /(?<![A-Za-z0-9._])(\$|A\$|AUD\s?)?(-?\d[\d,]*(?:\.\d+)?)(?:[eE]([+-]?\d+))?\s?(%|bps\b|basis points?\b|pts?\b|points?\b|percentage points?\b|pp\b|k\b|m\b|mn\b|b\b|bn\b|million\b|billion\b|thousand\b)?/gi;
+  const re = /(?<![A-Za-z0-9._…])(\$|A\$|AUD\s?|PHP\s?|₱)?(-?\d[\d,]*(?:\.\d+)?)(?![A-Za-z0-9]*…)(?:[eE]([+-]?\d+))?\s?(%|bps\b|basis points?\b|pts?\b|points?\b|percentage points?\b|pp\b|k\b|m\b|mn\b|b\b|bn\b|million\b|billion\b|thousand\b)?/gi;
   for (const m of text.matchAll(re)) {
     const [raw, cur, digits, exp, suffixRaw] = m;
     const suffix = (suffixRaw ?? "").toLowerCase();
@@ -60,14 +61,14 @@ export function extractFigures(text: string): Figure[] {
 export type Allowed = { value: number; unit: Unit }[];
 
 /** The figures a payload supplies. A key ending _pct or _pts carries a percentage;
- *  _aud carries dollars. Anything else is a plain number (counts, weeks). */
+ *  _aud or _php carries money. Anything else is a plain number (counts, weeks). */
 export function payloadFigures(payload: unknown): Allowed {
   const out: Allowed = [];
   const walk = (v: unknown, key: string) => {
     if (v === null || v === undefined) return;
     if (typeof v === "number" && Number.isFinite(v)) {
       const k = key.toLowerCase();
-      out.push({ value: v, unit: /_pct$|_pts$|_pp$|pct_|_mix$|share/.test(k) ? "pct" : /_aud$|aud_|sales|margin_aud|budget|revenue|cost|price/.test(k) ? "money" : "plain" });
+      out.push({ value: v, unit: /_pct$|_pts$|_pp$|pct_|_mix$|share/.test(k) ? "pct" : /_aud$|aud_|_php$|php_|sales|margin_aud|budget|revenue|cost|price/.test(k) ? "money" : "plain" });
       return;
     }
     if (typeof v === "string") {

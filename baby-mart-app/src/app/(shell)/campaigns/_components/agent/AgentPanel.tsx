@@ -6,7 +6,7 @@ import type { BlockTag } from "@/lib/campaign/agent-answer";
 import { inputCls, Button } from "../ui";
 import { ProgressTrail } from "./ProgressTrail";
 import { AgentAnswer } from "./AgentCards";
-import { useAgentRun, type AgentId, type Turn } from "./useAgentRun";
+import { useAgentRun, type AgentId, type AgentStageId, type Turn } from "./useAgentRun";
 
 // ─── An agent conversation: question, progress, answer ───────────────────────
 //
@@ -19,7 +19,7 @@ export function AgentPanel({
 }: {
   agent: AgentId;
   tag: BlockTag;
-  stage?: "BUILDER" | "IDEATION" | "INVESTIGATE";
+  stage?: AgentStageId;
   campaignId?: string | null;
   samples?: string[];
   placeholder?: string;

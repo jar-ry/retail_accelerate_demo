@@ -352,6 +352,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/planning/otb" icon={Boxes} label="OTB Position" color="violet" />
                   <NavItem href="/planning/commitments" icon={Wallet} label="Supplier Commitments" color="violet" />
                   <SectionLabel>AI Tools</SectionLabel>
+                  <NavItem href="/planning/investigate" icon={Bot} label="Plan Investigator" color="violet" />
                   <NavItem href="/planning/insights" icon={Lightbulb} label="Planning Insights" color="violet" />
                   <NavItem href="/planning/history" icon={History} label="Plan History & Audit" color="violet" />
                   {/* The ?persona= tag keeps these three on the planning sidebar.

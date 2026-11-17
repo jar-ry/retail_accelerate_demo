@@ -10,7 +10,8 @@ import { useCallback, useRef, useState } from "react";
 // the text, and at the end the server's audit row (run id and whether every
 // figure matched a tool result). A follow-up continues the same thread.
 
-export type AgentId = "campaignBuilder" | "campaignInvestigator";
+export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder";
+export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER";
 export type StepState = "running" | "success" | "error";
 export type Step = { id: string; name: string; toolType: string; input: unknown; status: StepState; detail?: string; startedAt: number; endedAt?: number };
 export type RunInfo = { runId: string; verified: boolean | null; unmatched: string[]; hasBlock: boolean };
@@ -73,7 +74,7 @@ export function applyEvent(t: Turn, e: Event, now = Date.now()): Turn {
   }
 }
 
-export function useAgentRun(agent: AgentId, context: { stage?: "BUILDER" | "IDEATION" | "INVESTIGATE"; campaignId?: string | null } = {}) {
+export function useAgentRun(agent: AgentId, context: { stage?: AgentStageId; campaignId?: string | null } = {}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const thread = useRef<{ threadId: number | null; parent: number }>({ threadId: null, parent: 0 });

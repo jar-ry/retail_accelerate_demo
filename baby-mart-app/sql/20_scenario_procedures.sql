@@ -590,7 +590,7 @@ BEGIN
      PROMPT_TEXT, RBU, DEPARTMENT, CLASS, FISCAL_YEAR, HALF, ASSUMPTIONS, STATUS,
      CREATED_BY, CREATED_AT, UPDATED_AT)
   SELECT :v_sid_a,
-    'Targeted price and promo on popular SKUs (+' || TO_CHAR(ROUND(:v_p * 100, 1)) || '% retail)',
+    'Targeted price and promo on popular SKUs (+' || TO_CHAR(ROUND(:v_p * 100, 1)::NUMBER(10, 1)) || '% retail)',
     'GOAL_SEEK_PRICE_PROMO', :v_parent, '2a', :P_PROMPT,
     :v_rbu, :P_DEPARTMENT, :P_CLASS, 'F27', :v_half,
     OBJECT_CONSTRUCT(
@@ -606,8 +606,8 @@ BEGIN
       'stock_treatment',  'No stock change. This option sells the same units-ish out of existing inventory at a higher price, so the buy is untouched.',
       'held_constant',    'Supplier cost, range width, promotional depth on the remaining deciles.',
       'caveat',           IFF(:v_achievable,
-                              'Elasticity is the binding assumption. At -1.4 a ' || TO_CHAR(ROUND(:v_p * 100, 1)) || '% price rise loses ' || TO_CHAR(ROUND(-:v_elast * :v_p * 100, 1)) || '% of units. If the true elasticity is worse than -1.4, this delivers less.',
-                              'NOT ACHIEVABLE through price alone. Beyond a ' || TO_CHAR(ROUND(:v_p_vertex * 100, 1)) || '% rise, lost units cost more than the extra margin earns. The most price can contribute here is PHP ' || TO_CHAR(ROUND(:v_max_gain / 1000000, 2)) || 'M.')
+                              'Elasticity is the binding assumption. At -1.4 a ' || TO_CHAR(ROUND(:v_p * 100, 1)::NUMBER(10, 1)) || '% price rise loses ' || TO_CHAR(ROUND(-:v_elast * :v_p * 100, 1)::NUMBER(10, 1)) || '% of units. If the true elasticity is worse than -1.4, this delivers less.',
+                              'NOT ACHIEVABLE through price alone. Beyond a ' || TO_CHAR(ROUND(:v_p_vertex * 100, 1)::NUMBER(10, 1)) || '% rise, lost units cost more than the extra margin earns. The most price can contribute here is PHP ' || TO_CHAR(ROUND(:v_max_gain / 1000000, 2)::NUMBER(12, 2)) || 'M.')
     ),
     'DRAFT', :P_CREATED_BY, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP();
 
