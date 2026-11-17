@@ -1,0 +1,32 @@
+definition_version: "2"
+
+# Deploy target: Snowhouse (SFCOGSOPS-SNOWHOUSE_AWS_US_WEST_2). The OneDigital
+# data lives in TEMP.JARCHEN_OD_{CURATED,CAMPAIGN}; the app and its code stage in
+# TEMP.JARCHEN_OD_APP. The environment variables that point the app at them are
+# in app.yml.
+
+entities:
+  OD_CAMPAIGN_APP:
+    type: snowflake-app
+    identifier:
+      name: OD_CAMPAIGN_APP
+      database: TEMP
+      schema: JARCHEN_OD_APP
+    artifacts:
+      - src: ./*
+        dest: ./
+        ignore:
+          - node_modules
+          - .env*
+          - __pycache__
+          - "*.pyc"
+          - .next
+          - .git
+          - snowflake.log
+          - tsconfig.tsbuildinfo
+
+    query_warehouse: MNEGLAY_XS
+    build_compute_pool:
+      name: SNOW_APPS_DEFAULT_COMPUTE_POOL
+    # No service_compute_pool: on Snowhouse the service runs on the managed pool.
+    code_stage: TEMP.JARCHEN_OD_APP.OD_CAMPAIGN_APP_STAGE

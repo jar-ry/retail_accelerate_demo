@@ -1,0 +1,29 @@
+install:
+  commands:
+    - [npm, ci]
+build:
+  commands:
+    - [npm, run, build]
+run:
+  command: [node, .next/standalone/server.js]
+artifacts:
+  - src: ".next/standalone/**"
+    dest: "."
+  - src: ".next/static/**"
+    dest: ".next/static"
+  - src: "public/**"
+    dest: "public"
+profile:
+  label: OneDigital - Officeworks Campaign & CRM
+  description: Cross-banner campaign management for Officeworks, using Bunnings and Kmart signals
+# Snowhouse: the OneDigital data is in TEMP.JARCHEN_OD_CURATED and
+# TEMP.JARCHEN_OD_CAMPAIGN (sql/od_*.sql, retargeted by scripts/od_target.py).
+environment_variables:
+  - name: BABY_MART_DATABASE
+    value: TEMP
+  - name: BABY_MART_SCHEMA_CURATED
+    value: JARCHEN_OD_CURATED
+  - name: CAMPAIGN_SCHEMA
+    value: TEMP.JARCHEN_OD_CAMPAIGN
+  - name: SNOWFLAKE_WAREHOUSE
+    value: MNEGLAY_XS

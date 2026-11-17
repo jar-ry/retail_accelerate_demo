@@ -1,0 +1,439 @@
+{
+ "question": "We can see customers buying trade tools at Bunnings. Design an Officeworks campaign for them.",
+ "text": "```campaign\n{\"name\": \"New Business Welcome - Bunnings Starters (Always-on)\",\n \"objective\": \"Turn members who are setting up a trade business into Officeworks business customers by selling them a laptop, a printer, business cards and signage.\",\n \"hypothesis\": \"New starters need office and admin kit they don't have yet, so a timely, need-led offer causes purchases that wouldn't happen otherwise. Established tradies already have this kit and buy anyway.\",\n \"audience\": {\"description\": \"OnePass members flagged as new business starters by their Bunnings trade buying, who don't already buy business supplies at Officeworks and aren't established tradies. Members without data-sharing consent are removed.\",\n  \"spec\": {\"all\":[{\"field\":\"BIZ_STARTER_FLAG\",\"op\":\"is_true\"}],\"any\":[],\"exclude\":[{\"field\":\"OW_BUSINESS_BUYER\",\"op\":\"is_true\"},{\"field\":\"PRIOR_TRADE_HISTORY\",\"op\":\"is_true\"}],\"channels\":[\"EMAIL\",\"SMS\"],\"promoted\":{\"category\":\"Business Essentials\",\"className\":null,\"brand\":null},\"suppress\":{\"fatigueDays\":14,\"coldContacts\":true,\"stockConflict\":true},\"quadrants\":null,\"cap\":null,\"lookalike\":null},\n  \"matched\": 1732, \"final_audience\": 846},\n \"channels\": [\"EMAIL\", \"SMS\"],\n \"promoted\": {\"category\": \"Business Essentials\", \"brand\": null},\n \"offer_id\": \"off-1\",\n \"start_date\": \"2026-11-17\", \"end_date\": \"2027-01-31\", \"budget_aud\": 7754,\n \"expected\": {\"incremental_conversions\": 30, \"lift_pts_low\": 3.6, \"lift_pts_high\": 12.9, \"basis\": \"SizeAudience's STARTER_NEW uplift cell (+3.55 pts on a 5.13% base). The interval is camp-h03's measured lift for STARTER_NEW members (+8.2 pts, 95% CI +3.6 to +12.9).\"},\n \"guardrails\": [{\"level\": \"CAUTION\", \"message\": \"An audience built on Bunnings or Kmart purchases needs OnePass data-sharing consent (applied automatically), and copy must speak to the need, never to what was bought at another banner.\"}],\n \"key_evidence\": [\n  {\"label\": \"camp-h03 lift, STARTER_NEW members\", \"value\": \"+8.24 pts\"},\n  {\"label\": \"camp-h03 overall lift (not significant)\", \"value\": \"+2.81 pts\"},\n  {\"label\": \"SMS lift across all campaigns\", \"value\": \"+6.82 pts\"},\n  {\"label\": \"camp-h04 lift, all Bunnings shoppers\", \"value\": \"-1.1 pts\"},\n  {\"label\": \"Expected net margin\", \"value\": \"AUD 6.5K\"}],\n \"draft\": null}\n```\n\nI recommend a campaign for **new trade-business starters only**, not everyone buying trade tools. Contacting every Bunnings shopper has already lost money. Of five candidate plays, this one ranks second on expected net margin, behind a back-to-school play for Kmart households.\n\n\n\n### The signal\n- **How it's built:** a member counts as a new business starter if they bought 3 or more of the 6 Bunnings trade categories within 90 days, with no trade buying in the 4\u201316 months before. The categories are power tools, specialist tools, ladders, tool storage, workwear/PPE and consumables. That pattern looks like someone setting up a business who needs a laptop, printer, business cards, signage and a business account.\n- **Its main weakness:** established tradies buy the same kinds of tools. They already have their setup and mostly buy anyway, so I've excluded them, along with members who already buy business supplies at Officeworks.\n- **Size:** 4,358 members bought a trade cluster, but 2,573 of them are established tradies. Only 1,785 are starters.\n\n### Why now\n- The signal fades quickly. The playbook says it stays fresh for about four months, after which the member is an established tradie. The opportunity sizing puts the freshest window at about 60 days after the first trade purchase.\n- Run it as an **always-on trigger**, not a one-off blast. Today 846 starters made their first trade purchase in the last 60 days, the same number as the final audience.\n- The live Black Friday laptop campaign is in the Technology category, so it doesn't clash with this one.\n\n### Who is in and who is left out\n- **Funnel:** 1,732 matched. 534 were removed for having no OnePass data-sharing consent. The audience builder applies that rule automatically because the audience uses Bunnings data. 846 remain.\n- **Quality:** all 846 are \"persuadable\" (members who buy more when contacted). The 255 \"sleeping dogs\" (members who buy less and unsubscribe when contacted) and 279 \"lost causes\" (members who rarely buy) are left out. No cold contacts remain, and the audience health score is 90.\n- **Mix:** Electrical 180, Carpentry 178, Plumbing 163, Cleaning 162, Landscaping 149.\n- **Copy rule:** speak to the need (\"setting up your business?\"), never to the purchase (\"we saw you bought a ladder at Bunnings\").\n\n### The offer\n- **Main offer:** **New Business Tech Bundle - $150 Off** (off-1): $150 off a laptop over $799 plus a printer, bought in one transaction with a new Officeworks business account.\n- **Bundle with:** **Free Business Card Design + 250 Cards** (off-2), **20% Off Signage and Vehicle Magnets** (off-3) and **Officeworks Business Account - Free Sign-Up** (off-4).\n\n### Expected result\n- About **30 incremental conversions**, or +3.55 pts on a 5.13% base. Expected net margin is about AUD 6.5K on AUD 7.8K of cost, much of it from follow-on business-account spend.\n- **The comparable test:** the New Business Welcome trade cluster test (camp-h03) lifted conversion by **+8.2 pts** (95% CI +3.6 to +12.9) for the starter members this campaign targets. Its overall lift was +2.8 pts and not significant.\n- **The broad version failed:** the business account campaign to all Bunnings shoppers (camp-h04) *lowered* conversion by 1.1 pts. Cold contacts did worst, at \u22121.9 pts.\n- **Channels:** SMS is the channel with significant lift (+6.82 pts across all campaigns, +6.1 pts in camp-h03). Email's lift is not significant, but email reaches 745 of the audience against 369 for SMS. Lead with SMS where members have opted in and use email as the follow-up.\n\n### Risks\n- The audience is small (846, under 100/month as a trigger), so each month's result will be noisy. Keep a randomised holdout and read results across months together.\n- Apple is short in 5 WA stores. Don't feature MacBooks in the WA laptop creative.\n- The $150 cost per redemption makes margin depend on follow-on spend. If take-up is weak, lead with the cheaper card and signage offers.\n- The signal is a proxy: some people who look like starters will be one-off renovators.\n\n### Other plays\n- **School list service for Kmart school-age households** ranks higher overall (expected net margin about AUD 62.6K), but it's a January play.\n- **All Bunnings shoppers** (about \u2212AUD 141K expected), **home-office furniture** (about \u2212AUD 1.0K) and **laptop trade-up** (about \u2212AUD 8.7K) all have negative expected net margins, so I wouldn't run them.\n\n### Next steps\nI haven't created a draft yet. If you want it, I'll set up the brief and draft audience from this spec. You'd then open it in the Audience builder, review and lock the audience, and have content approved.",
+ "events": [
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Planning the next steps",
+    "sequence_number": 0,
+    "status": "planning"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Choosing data sources to use",
+    "sequence_number": 11,
+    "status": "extracting_tool_calls"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Getting additional context",
+    "sequence_number": 12,
+    "status": "executing_tools"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 1,
+    "input": {
+     "analytical_search": false,
+     "limit": 5,
+     "num_chunks_per_doc": 0,
+     "query": "Bunnings business starter signal definition weaknesses fade timing data-sharing consent"
+    },
+    "name": "PlaybookSearch",
+    "sequence_number": 13,
+    "tool_use_id": "toolu_bdrk_01Gmnt23nezDDNvMCV8UWMLV",
+    "type": "cortex_search"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 2,
+    "input": {
+     "FOCUS": ""
+    },
+    "name": "FindOpportunities",
+    "sequence_number": 15,
+    "tool_use_id": "toolu_bdrk_01NVuNBZwoLH5G6q9VixTUPs",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "search_results": [
+        {
+         "confidence_score": 1,
+         "doc_id": "sig-biz",
+         "doc_title": "Business-starter signal (Bunnings to Officeworks)",
+         "id": "cs_8c2a6987-a300-4d7d-9bd8-89af550d3a08",
+         "search_service_name": "PlaybookSearch",
+         "source_id": 0,
+         "text": "BIZ_STARTER_FLAG marks a member who bought three or more of the six Bunnings trade categories (trade power tools, specialist trade tools, trade ladders, tool storage and transport, workwear and PPE, trade consumables) within 90 days, with no trade buying in the 4 to 16 months before. That cluster is what setting up a trade business looks like: an electrician, plumber, carpenter, landscaper or cleaner buying the kit. BIZ_STARTER_SCORE (0-100) grades it. What a new business needs from Officeworks: a laptop for quotes and invoices, a printer, business cards, signage and vehicle magnets, and a business account. The signal is fresh for about four months; after that the member is an established tradie. Established tradies (PRIOR_TRADE_HISTORY) also buy trade clusters but already have their set-up and mostly buy anyway: exclude them, along with members already buying business supplies at Officeworks (OW_BUSINESS_BUYER)."
+        },
+        {
+         "confidence_score": 1,
+         "doc_id": "learning-camp-h03-L2",
+         "doc_title": "New Business Welcome - Trade Cluster Test",
+         "id": "cs_d169ac1c-ea6a-45bf-b786-f81dd283bb8c",
+         "search_service_name": "PlaybookSearch",
+         "source_id": 1,
+         "text": "Business starter (Bunnings) = Yes: +8.2 pts lift (95% CI +3.5 pts to +12.8 pts) in New Business Welcome - Trade Cluster Test."
+        },
+        {
+         "confidence_score": 1,
+         "doc_id": "learning-camp-h04-L2",
+         "doc_title": "Business Account Sign-Up - All Bunnings Shoppers",
+         "id": "cs_0d4dce35-1ecd-4afb-b498-762ff90e9d4d",
+         "search_service_name": "PlaybookSearch",
+         "source_id": 2,
+         "text": "Business starter (Bunnings) = No: -1.1 pts lift (95% CI -1.7 pts to -0.5 pts) in Business Account Sign-Up - All Bunnings Shoppers -- contact LOWERED conversion."
+        },
+        {
+         "confidence_score": 1,
+         "doc_id": "policy-consent",
+         "doc_title": "Using Bunnings or Kmart purchases in Officeworks marketing",
+         "id": "cs_8d9896b7-bddb-4156-bf08-95ee70ae357d",
+         "search_service_name": "PlaybookSearch",
+         "source_id": 3,
+         "text": "A member's purchases at one banner may personalise another banner's marketing only with OnePass group data-sharing consent (GROUP_DATA_CONSENT). The audience builder adds this rule itself whenever an audience uses a Bunnings or Kmart field, and the funnel shows how many it removes. Copy must not reveal what was bought at another banner (\"we saw you bought a ladder at Bunnings\"): speak to the need (\"setting up your business?\"), not the purchase."
+        },
+        {
+         "doc_id": "learning-camp-h04-L4",
+         "doc_title": "Business Account Sign-Up - All Bunnings Shoppers",
+         "id": "cs_3e7901c1-977b-4582-a568-2f2a38e0b392",
+         "search_service_name": "PlaybookSearch",
+         "source_id": 4,
+         "text": "Need state = NO_SIGNAL_COLD: -1.9 pts lift (95% CI -2.7 pts to -1.1 pts) in Business Account Sign-Up - All Bunnings Shoppers -- contact LOWERED conversion."
+        }
+       ],
+       "search_results_persist": {}
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 3,
+    "name": "PlaybookSearch",
+    "sequence_number": 19,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_01Gmnt23nezDDNvMCV8UWMLV",
+    "type": "cortex_search"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "execution_type": "procedure",
+       "query_id": "01c87577-091c-9fbb-0001-dda5fb396ccf",
+       "result": "{\"ok\":true,\"as_of\":\"2026-11-13\",\"method\":\"evidence.campaign_lift_pts is the past campaign's lift over everyone it targeted; evidence.targeted_lift_pts is its lift for the members this play targets, the comparable figure. Eligible = matched, reachable on the play's channels, data-sharing consent where a Bunnings or Kmart signal is used, not contacted in 14 days. Expected incremental conversions use the uplift cells (track x need state) measured against holdouts in past campaigns. Value = first-order margin from the history plus six months of the follow-on margin such a customer makes at Officeworks. Net = value minus send and offer cost.\",\"opportunities\":[{\"rank\":1,\"play_id\":\"play-school\",\"title\":\"School list service for Kmart school-age households\",\"signal\":\"Kmart -> Officeworks\",\"category\":\"Back to School\",\"offer_id\":\"off-5\",\"offer\":\"School List Service - Upload, We Pack It\",\"other_offers\":[\"off-6\",\"off-7\"],\"channels\":[\"EMAIL\",\"SMS\"],\"matched\":23188,\"eligible\":11396,\"removed_no_data_sharing_consent\":7043,\"persuadable_members\":10829,\"sleeping_dog_members\":0,\"expected_incremental_conversions\":637.6,\"expected_lift_pts\":5.6,\"first_order_margin_aud\":47,\"follow_on_margin_6m_aud\":58,\"cost_aud\":4433,\"expected_net_margin_aud\":62636,\"timing\":\"Term 1 starts in 75-82 days. Invite in early January, remind two weeks before each state's start.\",\"evidence\":{\"campaign_id\":\"camp-h02\",\"campaign\":\"School List Pilot - Kmart Signal (VIC, QLD)\",\"campaign_lift_pts\":4.93,\"targeted_need_state\":\"SCHOOL_HIGH\",\"targeted_lift_pts\":8.87,\"targeted_holdout_members\":855},\"spec\":{\"all\":[{\"field\":\"SCHOOL_SIGNAL_CONFIDENCE\",\"op\":\"in\",\"values\":[\"HIGH\",\"MEDIUM\"]}],\"any\":[],\"exclude\":[{\"field\":\"SCHOOL_LIST_USED_LAST_YEAR\",\"op\":\"is_true\"}],\"channels\":[\"EMAIL\",\"SMS\"],\"promoted\":{\"category\":\"Back to School\",\"className\":\"School List Service\",\"brand\":null}}},{\"rank\":2,\"play_id\":\"play-business\",\"title\":\"New business starters from Bunnings: laptop, printer, cards and signage\",\"signal\":\"Bunnings -> Officeworks\",\"category\":\"Business Essentials\",\"offer_id\":\"off-1\",\"offer\":\"New Business Tech Bundle - $150 Off\",\"other_offers\":[\"off-2\",\"off-3\",\"off-4\"],\"channels\":[\"EMAIL\",\"SMS\"],\"matched\":1732,\"eligible\":846,\"removed_no_data_sharing_consent\":534,\"persuadable_members\":846,\"sleeping_dog_members\":0,\"expected_incremental_conversions\":30,\"expected_lift_pts\":3.55,\"first_order_margin_aud\":100,\"follow_on_margin_6m_aud\":375,\"cost_aud\":7754,\"expected_net_margin_aud\":6505,\"timing\":\"Now: the signal is fresh for about 60 days after the first trade purchase. Run as an always-on trigger.\",\"evidence\":{\"campaign_id\":\"camp-h03\",\"campaign\":\"New Business Welcome - Trade Cluster Test\",\"campaign_lift_pts\":2.81,\"targeted_need_state\":\"STARTER_NEW\",\"targeted_lift_pts\":8.24,\"targeted_holdout_members\":175},\"spec\":{\"all\":[{\"field\":\"BIZ_STARTER_FLAG\",\"op\":\"is_true\"}],\"any\":[],\"exclude\":[{\"field\":\"OW_BUSINESS_BUYER\",\"op\":\"is_true\"}],\"channels\":[\"EMAIL\",\"SMS\"],\"promoted\":{\"category\":\"Business Essentials\",\"className\":null,\"brand\":null}}},{\"rank\":3,\"play_id\":\"play-furniture\",\"title\":\"Kmart home-office shoppers to Officeworks furniture\",\"signal\":\"Kmart -> Officeworks\",\"category\":\"Furniture\",\"offer_id\":\"off-9\",\"offer\":\"Home Office Furniture - 15% Off\",\"other_offers\":[],\"channels\":[\"EMAIL\"],\"matched\":37664,\"eligible\":16225,\"removed_no_data_sharing_consent\":9883,\"persuadable_members\":0,\"sleeping_dog_members\":0,\"expected_incremental_conversions\":160.5,\"expected_lift_pts\":0.99,\"first_order_margin_aud\":124,\"follow_on_margin_6m_aud\":0,\"cost_aud\":20870,\"expected_net_margin_aud\":-1039,\"timing\":\"Any time; no seasonal peak.\",\"evidence\":{\"campaign_id\":\"camp-h05\",\"campaign\":\"Home Office Refresh - Kmart Home-Office Shoppers\",\"campaign_lift_pts\":1.14,\"targeted_need_state\":\"HOME_OFFICE\",\"targeted_lift_pts\":1.14,\"targeted_holdout_members\":1566},\"spec\":{\"all\":[{\"field\":\"HOME_OFFICE_12M\",\"op\":\"is_true\"}],\"any\":[],\"exclude\":[],\"channels\":[\"EMAIL\"],\"promoted\":{\"category\":\"Furniture\",\"className\":null,\"brand\":null}}},{\"rank\":4,\"play_id\":\"play-tech\",\"title\":\"Laptop trade-up for Officeworks tech owners\",\"signal\":\"Officeworks\",\"category\":\"Technology\",\"offer_id\":\"off-10\",\"offer\":\"Laptop Trade-Up - $100 Credit\",\"other_offers\":[],\"channels\":[\"EMAIL\",\"PUSH\"],\"matched\":5780,\"eligible\":4429,\"removed_no_data_sharing_consent\":1711,\"persuadable_members\":0,\"sleeping_dog_members\":0,\"expected_incremental_conversions\":29.6,\"expected_lift_pts\":0.67,\"first_order_margin_aud\":108,\"follow_on_margin_6m_aud\":0,\"cost_aud\":11906,\"expected_net_margin_aud\":-8697,\"timing\":\"After Black Friday; the live campaign already covers November.\",\"evidence\":{\"campaign_id\":\"camp-l01\",\"campaign\":\"Black Friday Tech - Early Deals on Laptops\",\"campaign_lift_pts\":0.34,\"targeted_need_state\":\"TECH_OWNER\",\"targeted_lift_pts\":1.08,\"targeted_holdout_members\":406},\"spec\":{\"all\":[{\"field\":\"TECH_LAST_DAYS\",\"op\":\"between\",\"min\":365,\"max\":760}],\"any\":[],\"exclude\":[],\"channels\":[\"EMAIL\",\"PUSH\"],\"promoted\":{\"category\":\"Technology\",\"className\":\"Laptops\",\"brand\":null}}},{\"rank\":5,\"play_id\":\"play-bunnings-all\",\"title\":\"Business account sign-up to every Bunnings shopper\",\"signal\":\"Bunnings -> Officeworks\",\"category\":\"Business Essentials\",\"offer_id\":\"off-4\",\"offer\":\"Officeworks Business Account - Free Sign-Up\",\"other_offers\":[],\"channels\":[\"EMAIL\"],\"matched\":85975,\"eligible\":37015,\"removed_no_data_sharing_consent\":22707,\"persuadable_members\":745,\"sleeping_dog_members\":19762,\"expected_incremental_conversions\":-293.5,\"expected_lift_pts\":-0.79,\"first_order_margin_aud\":100,\"follow_on_margin_6m_aud\":375,\"cost_aud\":1110,\"expected_net_margin_aud\":-140611,\"timing\":\"Ran in August.\",\"evidence\":{\"campaign_id\":\"camp-h04\",\"campaign\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"campaign_lift_pts\":-1.1,\"targeted_need_state\":null,\"targeted_lift_pts\":null,\"targeted_holdout_members\":null},\"spec\":{\"all\":[{\"field\":\"BUNNINGS_SPEND_12M\",\"op\":\"gte\",\"value\":1}],\"any\":[],\"exclude\":[],\"channels\":[\"EMAIL\"],\"promoted\":{\"category\":\"Business Essentials\",\"className\":null,\"brand\":null}}}],\"business_starter_signal\":{\"trade_cluster_members\":4358,\"starters\":1785,\"starters_with_data_sharing_consent\":1080,\"starters_consented_not_yet_officeworks_business\":1044,\"starters_first_trade_in_last_60d\":846,\"established_tradies_with_a_cluster\":2573,\"by_trade\":[{\"trade\":\"Carpentry\",\"starters\":381},{\"trade\":\"Electrical\",\"starters\":364},{\"trade\":\"Plumbing\",\"starters\":361},{\"trade\":\"Cleaning\",\"starters\":332},{\"trade\":\"Landscaping\",\"starters\":327},{\"trade\":\"Unknown\",\"starters\":20}]},\"school_signal\":[{\"confidence\":\"HIGH\",\"households\":27200,\"with_data_sharing_consent\":16530,\"starting_school\":2923,\"used_school_list_last_year\":6468,\"avg_est_school_age_kids\":1.38},{\"confidence\":\"MEDIUM\",\"households\":3201,\"with_data_sharing_consent\":1939,\"starting_school\":1693,\"used_school_list_last_year\":745,\"avg_est_school_age_kids\":1.02},{\"confidence\":\"LOW\",\"households\":17679,\"with_data_sharing_consent\":10711,\"starting_school\":0,\"used_school_list_last_year\":140,\"avg_est_school_age_kids\":0.36}],\"school_start\":[{\"state\":\"NT\",\"term1_start\":\"2027-01-27\",\"days_away\":75},{\"state\":\"QLD\",\"term1_start\":\"2027-01-27\",\"days_away\":75},{\"state\":\"SA\",\"term1_start\":\"2027-01-27\",\"days_away\":75},{\"state\":\"VIC\",\"term1_start\":\"2027-01-27\",\"days_away\":75},{\"state\":\"ACT\",\"term1_start\":\"2027-02-01\",\"days_away\":80},{\"state\":\"NSW\",\"term1_start\":\"2027-02-01\",\"days_away\":80},{\"state\":\"WA\",\"term1_start\":\"2027-02-01\",\"days_away\":80},{\"state\":\"TAS\",\"term1_start\":\"2027-02-03\",\"days_away\":82}],\"provenance\":\"Purchases are SYNTHETIC demo data; consent and campaign responses are MODELLED.\"}",
+       "truncated": false
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 4,
+    "name": "FindOpportunities",
+    "sequence_number": 20,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_01NVuNBZwoLH5G6q9VixTUPs",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Reviewing the results",
+    "sequence_number": 21,
+    "status": "reasoning_agent_stop"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Rethinking the plan",
+    "sequence_number": 22,
+    "status": "reevaluating_plan"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Planning the next steps",
+    "sequence_number": 23,
+    "status": "planning"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Choosing data sources to use",
+    "sequence_number": 24,
+    "status": "extracting_tool_calls"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Getting additional context",
+    "sequence_number": 25,
+    "status": "executing_tools"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 5,
+    "input": {
+     "CATEGORY": "Business Essentials",
+     "CHANNELS": "EMAIL,SMS",
+     "NEED_STATE": "STARTER_NEW"
+    },
+    "name": "EstimateLift",
+    "sequence_number": 26,
+    "tool_use_id": "toolu_bdrk_01TH14yhsnTkhQCEdapgy65T",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 7,
+    "input": {
+     "BRAND": "",
+     "CATEGORY": "Business Essentials",
+     "END_DATE": "2027-01-31",
+     "START_DATE": "2026-11-17"
+    },
+    "name": "CheckCampaignGuardrails",
+    "sequence_number": 28,
+    "tool_use_id": "toolu_bdrk_011cG3KKRJB2gFVLwHQbiRTr",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 6,
+    "input": {
+     "SPEC": "{\"all\":[{\"field\":\"BIZ_STARTER_FLAG\",\"op\":\"is_true\"}],\"any\":[],\"exclude\":[{\"field\":\"OW_BUSINESS_BUYER\",\"op\":\"is_true\"},{\"field\":\"PRIOR_TRADE_HISTORY\",\"op\":\"is_true\"}],\"channels\":[\"EMAIL\",\"SMS\"],\"promoted\":{\"category\":\"Business Essentials\",\"className\":null,\"brand\":null},\"suppress\":{\"fatigueDays\":14,\"coldContacts\":true,\"stockConflict\":true},\"quadrants\":null,\"cap\":null,\"lookalike\":null}"
+    },
+    "name": "SizeAudience",
+    "sequence_number": 30,
+    "tool_use_id": "toolu_bdrk_01UzmEWjNvJtgwZFZBkysa8K",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "execution_type": "procedure",
+       "query_id": "01c87577-091c-a051-0001-dda5fb4083a3",
+       "result": "{\"ok\":true,\"basis\":\"2 measured Business Essentials campaign(s)\",\"no_comparable_evidence\":false,\"note\":\"A comparable campaign's overall lift mixes everyone it targeted. For a specific audience, SizeAudience's expected_incremental_conversions uses the uplift cells below (lift by need state, measured against holdouts) and is the better estimate.\",\"expected_lift_pts\":-1.54,\"expected_lift_ci_low_pts\":-2.16,\"expected_lift_ci_high_pts\":-0.92,\"significant\":true,\"comparable_campaigns\":[{\"campaign_id\":\"camp-h04\",\"name\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"start\":\"2026-08-03\",\"treated\":33148,\"holdout\":3774,\"treated_rate_pct\":2.24,\"holdout_rate_pct\":3.34,\"lift_pts\":-1.1,\"ci_low_pts\":-1.69,\"ci_high_pts\":-0.5,\"significant\":true,\"net_aud\":-35437,\"roi\":-35.6},{\"campaign_id\":\"camp-h03\",\"name\":\"New Business Welcome - Trade Cluster Test\",\"start\":\"2026-03-16\",\"treated\":1302,\"holdout\":571,\"treated_rate_pct\":12.44,\"holdout_rate_pct\":9.63,\"lift_pts\":2.81,\"ci_low_pts\":-0.2,\"ci_high_pts\":5.82,\"significant\":false,\"net_aud\":-11798,\"roi\":-0.7}],\"lift_by_channel\":[{\"channel\":\"EMAIL\",\"treated\":143249,\"holdout\":19937,\"lift_pts\":-0.18,\"ci_low_pts\":-0.5,\"ci_high_pts\":0.14,\"significant\":false},{\"channel\":\"SMS\",\"treated\":2493,\"holdout\":730,\"lift_pts\":6.82,\"ci_low_pts\":4.21,\"ci_high_pts\":9.44,\"significant\":true}],\"uplift_cells\":[{\"track\":\"BUSINESS\",\"need_state\":\"STARTER_NEW\",\"meaning\":\"New business, not yet buying at Officeworks\",\"members\":683,\"lift_pts\":3.55,\"holdout_rate_pct\":5.13,\"quadrant\":\"PERSUADABLE\"}],\"learnings\":[{\"campaign\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"finding\":\"Cold contact (no need, never shopped Officeworks) = Yes: -1.9 pts lift (95% CI -2.7 pts to -1.1 pts) in Business Account Sign-Up - All Bunnings Shoppers -- contact LOWERED conversion.\",\"lift_pts\":-1.88,\"significant\":true},{\"campaign\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"finding\":\"Need state = NO_SIGNAL_COLD: -1.9 pts lift (95% CI -2.7 pts to -1.1 pts) in Business Account Sign-Up - All Bunnings Shoppers -- contact LOWERED conversion.\",\"lift_pts\":-1.88,\"significant\":true},{\"campaign\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"finding\":\"Business starter (Bunnings) = No: -1.1 pts lift (95% CI -1.7 pts to -0.5 pts) in Business Account Sign-Up - All Bunnings Shoppers -- contact LOWERED conversion.\",\"lift_pts\":-1.11,\"significant\":true},{\"campaign\":\"Business Account Sign-Up - All Bunnings Shoppers\",\"finding\":\"Business Account Sign-Up - All Bunnings Shoppers: -1.1 pts lift over holdout (95% CI -1.7 pts to -0.5 pts).\",\"lift_pts\":-1.1,\"significant\":true},{\"campaign\":\"New Business Welcome - Trade Cluster Test\",\"finding\":\"Need state = STARTER_NEW: +8.2 pts lift (95% CI +3.6 pts to +12.9 pts) in New Business Welcome - Trade Cluster Test.\",\"lift_pts\":8.24,\"significant\":true},{\"campaign\":\"New Business Welcome - Trade Cluster Test\",\"finding\":\"Business starter (Bunnings) = Yes: +8.2 pts lift (95% CI +3.5 pts to +12.8 pts) in New Business Welcome - Trade Cluster Test.\",\"lift_pts\":8.17,\"significant\":true},{\"campaign\":\"New Business Welcome - Trade Cluster Test\",\"finding\":\"Channel = SMS: +6.1 pts lift (95% CI +1.3 pts to +10.9 pts) in New Business Welcome - Trade Cluster Test.\",\"lift_pts\":6.09,\"significant\":true},{\"campaign\":\"New Business Welcome - Trade Cluster Test\",\"finding\":\"New Business Welcome - Trade Cluster Test: +2.8 pts lift over holdout (95% CI -0.2 pts to +5.8 pts), not significant.\",\"lift_pts\":2.81,\"significant\":false}]}",
+       "truncated": false
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 8,
+    "name": "EstimateLift",
+    "sequence_number": 36,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_01TH14yhsnTkhQCEdapgy65T",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "execution_type": "procedure",
+       "query_id": "01c87577-091c-9ab4-0001-dda5fb3e4773",
+       "result": "{\"ok\":true,\"category\":\"Business Essentials\",\"brand\":null,\"window\":\"2026-11-17 to 2027-01-31\",\"guardrails\":[{\"level\":\"CAUTION\",\"message\":\"An audience built on Bunnings or Kmart purchases needs OnePass data-sharing consent (applied automatically), and copy must speak to the need, never to what was bought at another banner.\"}],\"blocked\":false,\"stock_short_or_low\":[{\"brand\":\"Apple\",\"status\":\"SHORT\",\"stores\":5,\"states\":\"WA\",\"reason\":\"MacBook Air M3 allocation cut for Black Friday; WA stores hold under a week of cover.\"},{\"brand\":\"Casio\",\"status\":\"LOW\",\"stores\":4,\"states\":\"QLD\",\"reason\":\"Scientific calculators running ahead of forecast; replenishment due 6 December.\"}],\"overlapping_campaigns\":[{\"campaign_id\":\"camp-l01\",\"name\":\"Black Friday Tech - Early Deals on Laptops\",\"status\":\"LIVE\",\"start\":\"2026-10-26\",\"end\":\"2026-11-30\",\"category\":\"Technology\"}],\"customers_contacted_last_14d\":0,\"school_start\":[],\"active_offers\":[{\"offer_id\":\"off-1\",\"name\":\"New Business Tech Bundle - $150 Off\",\"type\":\"Bundle\",\"category\":\"Business Essentials\",\"terms\":\"$150 off when a laptop over $799 and a printer are bought in one transaction with a new Officeworks business account. Valid 30 days from the offer.\",\"cost_per_redemption_aud\":150},{\"offer_id\":\"off-2\",\"name\":\"Free Business Card Design + 250 Cards\",\"type\":\"Promo\",\"category\":\"Business Essentials\",\"terms\":\"One free design and 250 premium business cards per new business account. Collect from any Officeworks Print & Copy centre.\",\"cost_per_redemption_aud\":30},{\"offer_id\":\"off-3\",\"name\":\"20% Off Signage and Vehicle Magnets\",\"type\":\"Discount\",\"category\":\"Business Essentials\",\"terms\":\"20% off signage and vehicle magnet orders placed in store or online. One order per customer; valid 30 days.\",\"cost_per_redemption_aud\":22},{\"offer_id\":\"off-4\",\"name\":\"Officeworks Business Account - Free Sign-Up\",\"type\":\"Service\",\"category\":\"Business Essentials\",\"terms\":\"Free to join. 30-day account terms subject to approval. Business pricing on bulk orders.\",\"cost_per_redemption_aud\":0}],\"rejected_ideas\":[]}",
+       "truncated": false
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 9,
+    "name": "CheckCampaignGuardrails",
+    "sequence_number": 38,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_011cG3KKRJB2gFVLwHQbiRTr",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "execution_type": "procedure",
+       "query_id": "01c87577-091c-83ec-0001-dda5fb4121e7",
+       "result": "{\"ok\":true,\"spec\":{\"version\":1,\"all\":[{\"field\":\"BIZ_STARTER_FLAG\",\"op\":\"is_true\"}],\"any\":[],\"exclude\":[{\"field\":\"OW_BUSINESS_BUYER\",\"op\":\"is_true\"},{\"field\":\"PRIOR_TRADE_HISTORY\",\"op\":\"is_true\"}],\"suppress\":{\"fatigueDays\":14,\"coldContacts\":true,\"stockConflict\":true},\"channels\":[\"EMAIL\",\"SMS\"],\"promoted\":{\"category\":\"Business Essentials\",\"className\":null,\"brand\":null},\"quadrants\":null,\"lookalike\":null,\"cap\":null},\"description\":\"New business starter \u00b7 excluding Already buys business supplies at Officeworks; Established tradie (trade buying 4-16 months ago)\",\"cross_banner_fields_used\":[\"BIZ_STARTER_FLAG\",\"PRIOR_TRADE_HISTORY\"],\"matched\":1732,\"consented\":1380,\"eligible\":846,\"final_audience\":846,\"removed_by_suppression\":[{\"rule\":\"No OnePass data-sharing consent (Bunnings or Kmart signal used)\",\"members\":534},{\"rule\":\"Contacted in the last 14 days\",\"members\":0},{\"rule\":\"No sign of need and never shopped at Officeworks\",\"members\":0}],\"final_home_store_short_of_brand\":0,\"final_starting_school\":38,\"days_to_school_start\":{\"min\":75,\"max\":82},\"reachable_by_channel\":{\"EMAIL\":745,\"SMS\":369,\"PUSH\":270},\"uplift_quadrants\":[{\"quadrant\":\"PERSUADABLE\",\"consented\":846,\"in_audience\":846,\"expected_incremental_conversions\":30},{\"quadrant\":\"SURE_THING\",\"consented\":0,\"in_audience\":0,\"expected_incremental_conversions\":0},{\"quadrant\":\"LOST_CAUSE\",\"consented\":279,\"in_audience\":0,\"expected_incremental_conversions\":0},{\"quadrant\":\"SLEEPING_DOG\",\"consented\":255,\"in_audience\":0,\"expected_incremental_conversions\":0}],\"sure_things_left_out\":0,\"expected_incremental_conversions\":30,\"expected_lift_pts\":3.55,\"expected_base_rate_pct\":5.13,\"audience_health_score\":90,\"needs_product_share_pct\":100,\"cold_contact_share_pct\":0,\"contacted_30d_share_pct\":42,\"composition\":{\"need_state\":[{\"value\":\"STARTER_NEW\",\"members\":846,\"label\":\"New business, not yet buying at Officeworks\"}],\"school_signal\":[{\"value\":\"NONE\",\"members\":566},{\"value\":\"HIGH\",\"members\":161},{\"value\":\"LOW\",\"members\":100},{\"value\":\"MEDIUM\",\"members\":19}],\"trade\":[{\"value\":\"Electrical\",\"members\":180},{\"value\":\"Carpentry\",\"members\":178},{\"value\":\"Plumbing\",\"members\":163},{\"value\":\"Cleaning\",\"members\":162},{\"value\":\"Landscaping\",\"members\":149}],\"officeworks_relationship\":[{\"value\":\"Active shopper\",\"members\":435},{\"value\":\"Never shopped\",\"members\":398},{\"value\":\"Lapsed shopper\",\"members\":13}],\"home_state\":[{\"value\":\"NSW\",\"members\":296},{\"value\":\"VIC\",\"members\":239},{\"value\":\"QLD\",\"members\":142},{\"value\":\"SA\",\"members\":65},{\"value\":\"WA\",\"members\":64}]},\"provenance\":\"Counts from purchases (SYNTHETIC demo data); consent and uplift are MODELLED.\"}",
+       "truncated": false
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 10,
+    "name": "SizeAudience",
+    "sequence_number": 40,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_01UzmEWjNvJtgwZFZBkysa8K",
+    "type": "generic"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Reviewing the results",
+    "sequence_number": 41,
+    "status": "reasoning_agent_stop"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Rethinking the plan",
+    "sequence_number": 42,
+    "status": "reevaluating_plan"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Planning the next steps",
+    "sequence_number": 43,
+    "status": "planning"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Choosing data sources to use",
+    "sequence_number": 68,
+    "status": "extracting_tool_calls"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Getting additional context",
+    "sequence_number": 69,
+    "status": "executing_tools"
+   }
+  },
+  {
+   "event": "response.tool_use",
+   "data": {
+    "client_side_execute": false,
+    "content_index": 12,
+    "input": {
+     "chart": "{\"$schema\":\"https://vega.github.io/schema/vega-lite/v5.json\",\"title\":\"Candidate plays by expected net margin (AUD)\",\"mark\":\"bar\",\"encoding\":{\"y\":{\"field\":\"play\",\"type\":\"nominal\",\"sort\":\"-x\",\"title\":null},\"x\":{\"field\":\"net_margin_aud\",\"type\":\"quantitative\",\"title\":\"Expected net margin (AUD)\"}}}",
+     "question": "THIS FIELD WILL BE DEPRECATED SOON. Please stop using it and use the 'chart' field instead.",
+     "values": [
+      {
+       "net_margin_aud": 62636,
+       "play": "School list (Kmart)"
+      },
+      {
+       "net_margin_aud": 6505,
+       "play": "New business starters (Bunnings)"
+      },
+      {
+       "net_margin_aud": -1039,
+       "play": "Home-office furniture (Kmart)"
+      },
+      {
+       "net_margin_aud": -8697,
+       "play": "Laptop trade-up"
+      },
+      {
+       "net_margin_aud": -140611,
+       "play": "All Bunnings shoppers"
+      }
+     ]
+    },
+    "name": "data_to_chart",
+    "sequence_number": 70,
+    "tool_use_id": "toolu_bdrk_01FpV4TYjRpzBLhTRcBqik6z",
+    "type": "data_to_chart"
+   }
+  },
+  {
+   "event": "response.tool_result",
+   "data": {
+    "content": [
+     {
+      "json": {
+       "charts": [
+        "{\"$schema\":\"https://vega.github.io/schema/vega-lite/v5.json\",\"config\":{\"bar\":{\"minBandSize\":5}},\"data\":{\"values\":[{\"net_margin_aud\":62636,\"play\":\"School list (Kmart)\"},{\"net_margin_aud\":6505,\"play\":\"New business starters (Bunnings)\"},{\"net_margin_aud\":-1039,\"play\":\"Home-office furniture (Kmart)\"},{\"net_margin_aud\":-8697,\"play\":\"Laptop trade-up\"},{\"net_margin_aud\":-140611,\"play\":\"All Bunnings shoppers\"}]},\"encoding\":{\"tooltip\":[{\"field\":\"net_margin_aud\",\"format\":\",.6~f\",\"title\":\"Expected net margin (AUD)\",\"type\":\"quantitative\"},{\"field\":\"play\",\"title\":null,\"type\":\"nominal\"}],\"x\":{\"axis\":{\"format\":\".3~s\",\"labelExpr\":\"replace(datum.label, 'G', 'B')\"},\"field\":\"net_margin_aud\",\"sort\":null,\"title\":\"Expected net margin (AUD)\",\"type\":\"quantitative\"},\"y\":{\"field\":\"play\",\"sort\":\"-x\",\"title\":null,\"type\":\"nominal\"}},\"mark\":\"bar\",\"title\":\"Candidate plays by expected net margin (AUD)\",\"usermeta\":{\"snowflake\":{\"color_mapping\":{\"bar\":{\"hex\":\"#4c78a8\",\"name\":\"blue\"}},\"columnTypes\":[{\"length\":0,\"name\":\"net_margin_aud\",\"nullable\":false,\"precision\":0,\"scale\":0,\"type\":\"REAL\"},{\"length\":0,\"name\":\"play\",\"nullable\":false,\"precision\":0,\"scale\":0,\"type\":\"VARCHAR\"}],\"refreshSQL\":\"\",\"sanitizedSQLQueryID\":\"\"}}}"
+       ]
+      },
+      "type": "json"
+     }
+    ],
+    "content_index": 13,
+    "name": "data_to_chart",
+    "sequence_number": 72,
+    "status": "success",
+    "tool_use_id": "toolu_bdrk_01FpV4TYjRpzBLhTRcBqik6z",
+    "type": "data_to_chart"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Reviewing the results",
+    "sequence_number": 73,
+    "status": "reasoning_agent_stop"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Rethinking the plan",
+    "sequence_number": 74,
+    "status": "reevaluating_plan"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Planning the next steps",
+    "sequence_number": 75,
+    "status": "planning"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Reviewing the results",
+    "sequence_number": 543,
+    "status": "reasoning_agent_stop"
+   }
+  },
+  {
+   "event": "response.status",
+   "data": {
+    "message": "Forming the answer",
+    "sequence_number": 544,
+    "status": "proceeding_to_answer"
+   }
+  }
+ ]
+}
