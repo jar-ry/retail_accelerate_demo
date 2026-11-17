@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronRight, ChevronDown, Plus, ListChecks } from "lucide-react";
+import Link from "next/link";
+import { Bot, ChevronRight, ChevronDown, Plus, ListChecks } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Banner, Segmented, Button, Pill, InfoTip, OwnedCell, Th, Td } from "../_components/ui";
 import { EditDialog, type EditPayload, type ValueKind } from "../_components/EditDialog";
 import { useHop, useHopAction, ownershipMap, type Row } from "../_components/useHop";
@@ -286,6 +287,7 @@ export default function StorePlanPage() {
         title="Store plan"
         subtitle={<>{PERIOD_DUAL} · the budget, built store by store from two drivers: like-for-like % and margin %</>}
         right={
+          <>
           <div className="text-right text-[11px] text-slate-500">
             {data.approval ? (
               <>
@@ -294,6 +296,11 @@ export default function StorePlanPage() {
               </>
             ) : <div>draft: no approved baseline</div>}
           </div>
+          <Link href={`/hop/investigate?q=${encodeURIComponent("Which states plan the weakest like-for-like, and why?")}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700">
+            <Bot className="h-3.5 w-3.5" /> Investigate like-for-like
+          </Link>
+          </>
         }
       />
 

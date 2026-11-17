@@ -102,6 +102,17 @@ export default function HopOverview() {
 
       <div className="grid gap-4 xl:grid-cols-3">
         <InsightPanel surface="OVERVIEW" className="xl:col-span-2" />
+        <div className="space-y-4">
+        <Card title="Ask the Planning Investigator" subtitle="Tests every candidate cause against the store plan, the MFP and the ownership registry, and says who has to move.">
+          <div className="space-y-1.5">
+            {["Why does QLD plan weaker like-for-like than the rest of the business?", "Why is the bottom-up MFP short of the store plan, and who has to move?"].map((q) => (
+              <Link key={q} href={`/hop/investigate?q=${encodeURIComponent(q)}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:border-teal-300 hover:bg-teal-50/50">
+                {q}<ArrowRight className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+              </Link>
+            ))}
+          </div>
+        </Card>
         <Card title="Needs attention" subtitle="What is unresolved, what has moved, and what is waiting on a decision.">
           {attention.length === 0 ? (
             <p className="text-xs text-slate-500">Nothing outstanding.</p>
@@ -117,6 +128,7 @@ export default function HopOverview() {
             </div>
           )}
         </Card>
+        </div>
       </div>
 
       <Card title="Actuals against budget and forecast"

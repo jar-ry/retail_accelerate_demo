@@ -30,6 +30,10 @@ const TOOL_META: Record<string, Meta> = {
   GoalSeek: { icon: FlaskConical, label: "Solver · Goal seek GP (draft scenarios)" },
   RangeCut: { icon: PenLine, label: "Solver · Range rationalisation (draft scenario)" },
   ScenarioReview: { icon: ShieldCheck, label: "Tool · Scenario impact and guardrails" },
+  StoreEvidence: { icon: Database, label: "Tool · Store plan evidence pack" },
+  TestStoreHypothesis: { icon: FlaskConical, label: "Tool · Test a cause of the LFL gap" },
+  ChainEvidence: { icon: Database, label: "Tool · Planning chain evidence pack" },
+  TestChainGap: { icon: FlaskConical, label: "Tool · Test a cause of the chain gap" },
   system_execute_sql: { icon: Database, label: "Running the query" },
   data_to_chart: { icon: BarChart3, label: "Building a chart" },
 };
@@ -59,6 +63,9 @@ export function describeInput(name: string, input: unknown): string {
   if (name === "GoalSeek") return [o.NODE, typeof o.TARGET_GP_PHP === "number" ? `PHP ${(o.TARGET_GP_PHP / 1e6).toFixed(1)}M GP` : null, o.HALF].filter(Boolean).join(" · ");
   if (name === "RangeCut") return [o.CLASS_NAME, o.BOTTOM_PCT ? `bottom ${o.BOTTOM_PCT}%` : null, o.HALF].filter(Boolean).join(" · ");
   if (name === "ScenarioReview") return String(o.SCENARIO_ID ?? "");
+  if (name === "StoreEvidence") return String(o.SCOPE ?? "");
+  if (name === "TestStoreHypothesis") return `${o.SCOPE} · split by ${String(o.DIMENSION)}`;
+  if (name === "TestChainGap") return `${o.NODE} · split by ${String(o.DIMENSION)}`;
   if (name === "CheckCampaignGuardrails") return [o.CATEGORY, o.BRAND || "no brand", o.START_DATE && `${o.START_DATE} → ${o.END_DATE}`].filter(Boolean).join(" · ");
   if (name === "EstimateLift") return [o.CATEGORY || "all categories", o.CHANNELS, o.RECENCY_BAND].filter(Boolean).join(" · ");
   if (name === "SizeAudience" || name === "CreateCampaignDraft") {

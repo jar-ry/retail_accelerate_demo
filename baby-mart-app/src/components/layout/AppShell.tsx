@@ -373,6 +373,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/hop/mfp" icon={Layers} label="MFP" color="teal" />
                   <NavItem href="/hop/wssi" icon={CalendarRange} label="WSSI" color="teal" />
                   <NavItem href="/hop/tpr" icon={Filter} label="Range review (TPR)" color="teal" />
+                  <NavItem href="/hop/investigate" icon={Bot} label="Planning Investigator" color="teal" />
                   <SectionLabel>Govern</SectionLabel>
                   <NavItem href="/hop/approve" icon={Lock} label="Approve & lock" color="teal" />
                   <NavItem href="/hop/ownership" icon={ShieldCheck} label="Ownership" color="teal" />

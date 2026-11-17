@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Pencil } from "lucide-react";
+import Link from "next/link";
+import { Bot, Pencil } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Banner, Button, Pill, InfoTip, Th, Td, Segmented } from "../_components/ui";
 import { EditDialog } from "../_components/EditDialog";
 import { useHop, useHopAction, ownershipMap, type Row } from "../_components/useHop";
@@ -68,7 +69,13 @@ export default function MfpPage() {
   return (
     <div className="p-6 space-y-4">
       <PageHeader title="MFP" subtitle={<>{PERIOD_DUAL} · does the product plan deliver the budget? Top-down from the store plan against bottom-up from the range review.</>}
-        right={data.approval ? <div className="text-right text-[11px] text-slate-500">approved baseline in force: agreed and Buying numbers need an escalation note</div> : null} />
+        right={<>
+          {data.approval ? <div className="text-right text-[11px] text-slate-500">approved baseline in force: agreed and Buying numbers need an escalation note</div> : null}
+          <Link href={`/hop/investigate?q=${encodeURIComponent("Why is the bottom-up MFP short of the store plan, and who has to move?")}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700">
+            <Bot className="h-3.5 w-3.5" /> Investigate the gap
+          </Link>
+        </>} />
       {flash && <Banner tone={flash.tone} onClose={() => setFlash(null)}>{flash.text}</Banner>}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

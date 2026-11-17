@@ -130,6 +130,13 @@ export const AGENTS = {
     label: "Scenario Builder",
     fqn: `${DB}.${SCHEMA_AI}.PLAN_BUILDER_AGENT`,
   },
+  // Head of Planning's investigator lives with its data (agent/deploy_hop_agents.sql),
+  // resolved the way src/lib/hop/schema.ts resolves the schema.
+  hopInvestigator: {
+    id: "hopInvestigator",
+    label: "Planning Investigator",
+    fqn: `${process.env.HOP_SCHEMA?.trim() || `${DB}.HEAD_OF_PLANNING`}.HOP_INVESTIGATOR_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

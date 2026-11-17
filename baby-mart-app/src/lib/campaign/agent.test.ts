@@ -118,6 +118,53 @@ describe("planning agent answers", () => {
   });
 });
 
+// Recorded runs of the Head of Planning investigator on canonical (agent/deploy_hop_agents.sql):
+// QLD like-for-like, the planning chain, and the weakest VIC stores.
+describe("head of planning investigator answers", () => {
+  type Rca = { headline: string; hypotheses: { hypothesis: string; verdict: string }[]; actions: { owner: string }[] };
+  const rca = (name: string) => splitBlock<Rca>(fixture(name).text, "rca").block!;
+  const verdict = (b: Rca, re: RegExp) => b.hypotheses.find((h) => re.test(h.hypothesis))?.verdict;
+
+  it("verifies every AUD figure and point it wrote against its tools", () => {
+    for (const name of ["hop_qld", "hop_chain", "hop_vic"]) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "rca");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("rca", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("explains QLD by store mix and rules out edits since approval", () => {
+    const b = rca("hop_qld");
+    expect(b.headline).toMatch(/mix|which stores/i);
+    expect(verdict(b, /mix/i)).toBe("CONFIRMED");
+    expect(verdict(b, /edit/i)).toBe("RULED_OUT");
+  });
+
+  it("puts the planning-chain gap on the Prams range and gives the move to Buying", () => {
+    const b = rca("hop_chain");
+    expect(b.headline).toMatch(/Prams/i);
+    expect(verdict(b, /top-down|target/i)).toBe("RULED_OUT");
+    expect(verdict(b, /department/i)).toBe("CONFIRMED");
+    expect(b.actions[0].owner).toBe("Buying");
+  });
+
+  it("finds VIC in line and names the refurbishment and cannibalisation", () => {
+    const b = rca("hop_vic");
+    expect(b.headline).toMatch(/in line/i);
+    expect(verdict(b, /refurb/i)).toBe("CONFIRMED");
+    expect(verdict(b, /cannibal/i)).toBe("CONFIRMED");
+    expect(verdict(b, /mix/i)).toBe("RULED_OUT");
+  });
+
+  it("describes the investigator's steps in words", () => {
+    expect(describeInput("TestStoreHypothesis", { SCOPE: "QLD", DIMENSION: "mix" })).toBe("QLD · split by mix");
+    expect(describeInput("TestChainGap", { NODE: "200", DIMENSION: "owner" })).toBe("200 · split by owner");
+  });
+});
+
 describe("progress trail", () => {
   it("turns the recorded stream into steps that each finish", () => {
     const f = fixture("inv_001");
