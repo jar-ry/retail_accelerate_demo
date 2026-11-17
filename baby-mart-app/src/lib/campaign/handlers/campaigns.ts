@@ -33,7 +33,7 @@ function liftRows(rows: Row[]) {
 
 export async function getCampaign(campaignIdRaw: string | null) {
   const campaignId = id(campaignIdRaw);
-  const [camp, log, liftBy, ab, daily, replies, samples, content, plan, audiences, members, stock, alertLog, metricsAll, settings, asOf, griev] = await batch([
+  const [camp, log, liftBy, ab, daily, replies, samples, content, plan, audiences, members, stock, alertLog, metricsAll, settings, asOf, griev, shortNow] = await batch([
     { sql: SQL.SQL_CAMPAIGN, binds: [campaignId] },
     { sql: SQL.SQL_STATUS_LOG, binds: [campaignId] },
     { sql: SQL.SQL_LIFT_BY, binds: [campaignId, campaignId] },
@@ -50,6 +50,13 @@ export async function getCampaign(campaignIdRaw: string | null) {
     SQL.SQL_CAMPAIGN_METRICS, SQL.SQL_SETTINGS, SQL.SQL_AS_OF,
     { sql: `SELECT COUNT(*) AS N FROM ${S}.AUDIENCE_MEMBER WHERE CAMPAIGN_ID = ? AND GROUP_CODE = 'TREATED' AND SUPPRESSED_AT IS NULL
             AND COALESCE(NEG_VOICE_120D, 0) > 0 AND NEG_THEME IN ('Price and value', 'Promotions and offers')`, binds: [campaignId] },
+    // Treated members still being contacted whose home store is short of the
+    // promoted brand NOW. The audience's STOCK_CONFLICT is frozen at lock (it is a
+    // measurement dimension); the monitoring alert reads the live supply position,
+    // so an approved stockout recovery (sql/46) clears it.
+    { sql: `SELECT COUNT(*) AS N FROM ${S}.AUDIENCE_MEMBER am JOIN ${S}.CAMPAIGN c ON c.CAMPAIGN_ID = am.CAMPAIGN_ID
+            WHERE am.CAMPAIGN_ID = ? AND am.GROUP_CODE = 'TREATED' AND am.SUPPRESSED_AT IS NULL
+              AND am.HOME_STORE_CODE IN (SELECT STORE_CODE FROM ${S}.SUPPLY_POSITION WHERE BRAND_NAME = c.PROMOTED_BRAND AND STATUS = 'SHORT')`, binds: [campaignId] },
   ]);
   if (!camp.length) throw new CmpError(404, `No campaign ${campaignId}.`);
   const mRow = metricsAll.find((r) => r.CAMPAIGN_ID === campaignId)!;
@@ -62,7 +69,7 @@ export async function getCampaign(campaignIdRaw: string | null) {
   const abTest = a && b ? (() => { const l = lift({ n: n(b.N), conv: n(b.CONV) }, { n: n(a.N), conv: n(a.CONV) }); return { a: { n: n(a.N), conv: n(a.CONV) }, b: { n: n(b.N), conv: n(b.CONV) }, bMinusAPp: l.liftPp, ciLowPp: l.ciLowPp, ciHighPp: l.ciHighPp, significant: l.significant, p: pValue(l.z) }; })() : null;
   return {
     campaign: camp[0], log, metrics: m, health: m.sends ? healthOf(m, negShare) : null,
-    alerts: alertsFor(m, s, negShare, n(griev[0]?.N), alertLog), alertLog,
+    alerts: alertsFor({ ...m, stockConflict: n(shortNow[0]?.N) }, s, negShare, n(griev[0]?.N), alertLog), alertLog,
     liftBy: liftRows(liftBy), abTest, daily, replies, replySamples: samples, negReplyShare: negShare,
     content, plan, audiences, members, stock, settings: s,
   };
@@ -150,7 +157,7 @@ export async function alertAction(body: unknown, user: string) {
   const action = String(b.action ?? "");
   if (!["PAUSE", "SUPPRESS_STOCK", "SUPPRESS_GRIEVANCE", "DISMISS"].includes(action)) throw new CmpError(400, "Unknown action.");
   return tx(async (run) => {
-    const c = await run(`SELECT STATUS, START_DATE, SIMULATED_THROUGH FROM ${S}.CAMPAIGN WHERE CAMPAIGN_ID = ?`, [cid]);
+    const c = await run(`SELECT STATUS, START_DATE, SIMULATED_THROUGH, PROMOTED_BRAND FROM ${S}.CAMPAIGN WHERE CAMPAIGN_ID = ?`, [cid]);
     if (!c.length) throw new CmpError(404, "No such campaign.");
     let taken = "Dismissed";
     if (action === "PAUSE") {
@@ -159,13 +166,16 @@ export async function alertAction(body: unknown, user: string) {
       await run(`INSERT INTO ${S}.CAMPAIGN_STATUS_LOG SELECT ?, ?, 'PAUSED', ?, ?, ${NOW}`, [cid, c[0].STATUS, `Paused from alert ${code}.`, user]);
       taken = "Paused the campaign";
     } else if (action !== "DISMISS") {
-      const cond = action === "SUPPRESS_STOCK" ? "COALESCE(STOCK_CONFLICT, FALSE)"
+      // Stock: members whose home store is short of the brand now (the live supply
+      // position, which an approved stockout recovery lifts), not the lock-time flag.
+      const cond = action === "SUPPRESS_STOCK" ? `HOME_STORE_CODE IN (SELECT STORE_CODE FROM ${S}.SUPPLY_POSITION WHERE BRAND_NAME = ? AND STATUS = 'SHORT')`
         : "COALESCE(NEG_VOICE_120D, 0) > 0 AND NEG_THEME IN ('Price and value', 'Promotions and offers')";
       const r = await run(
         `UPDATE ${S}.AUDIENCE_MEMBER SET SUPPRESSED_AT = DATEADD('day', 1, COALESCE(?::DATE, ?::DATE)),
                 SUPPRESS_REASON = ?
          WHERE CAMPAIGN_ID = ? AND GROUP_CODE = 'TREATED' AND SUPPRESSED_AT IS NULL AND ${cond}`,
-        [isoDate(c[0].SIMULATED_THROUGH), isoDate(c[0].START_DATE), action === "SUPPRESS_STOCK" ? "Home store short of the promoted brand" : "Recent price complaint", cid]);
+        [isoDate(c[0].SIMULATED_THROUGH), isoDate(c[0].START_DATE), action === "SUPPRESS_STOCK" ? "Home store short of the promoted brand" : "Recent price complaint", cid,
+          ...(action === "SUPPRESS_STOCK" ? [String(c[0].PROMOTED_BRAND ?? "")] : [])]);
       const changed = n((r[0] as Row | undefined)?.["number of rows updated"]);
       taken = `Suppressed ${changed.toLocaleString("en-AU")} members (${action === "SUPPRESS_STOCK" ? "home store short" : "recent price complaint"})`;
     }

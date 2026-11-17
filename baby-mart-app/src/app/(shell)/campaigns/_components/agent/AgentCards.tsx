@@ -59,7 +59,7 @@ export function RunBadge({ run }: { run?: RunInfo }) {
     : <span title={run.unmatched.join(" · ")} className="inline-flex items-center gap-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700"><ShieldAlert className="h-3 w-3" />{run.unmatched.length} figure{run.unmatched.length === 1 ? "" : "s"} unverified</span>;
 }
 
-function EvidenceGrid({ items }: { items?: Evidence[] }) {
+export function EvidenceGrid({ items }: { items?: Evidence[] }) {
   if (!items?.length) return null;
   return (
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
@@ -247,7 +247,11 @@ export function CampaignCard({ c, run }: { c: CampaignBlock; run?: RunInfo }) {
         <ul className="mt-3 space-y-1">
           {c.guardrails.map((g, i) => (
             <li key={i} className={`flex gap-1.5 text-[11px] ${g.level === "BLOCK" ? "text-red-700" : "text-amber-800"}`}>
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /><span className="font-semibold">{g.level.toLowerCase()}</span> {g.message}
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /><span><span className="font-semibold">{g.level.toLowerCase()}</span> {g.message}
+                {g.level === "BLOCK" && / is short at /.test(g.message) && c.promoted?.brand ? (
+                  // A stock BLOCK has a supply fix: an approved recovery plan lifts the stores from SHORT.
+                  <> <Link href={`/replenishment/recovery?q=${encodeURIComponent(`${c.promoted.brand} is short and blocking a campaign. Get it back on shelf.`)}`} className="font-medium underline">Ask Supply to recover stock</Link></>
+                ) : null}</span>
             </li>
           ))}
         </ul>

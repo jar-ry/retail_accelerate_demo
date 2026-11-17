@@ -218,6 +218,71 @@ describe("brand investigator answers", () => {
   });
 });
 
+// Recorded runs of the Supply Chain stockout recovery builder on canonical
+// (agent/deploy_supply_agents.sql): Rascal + Friends NSW at 4 and 6 weeks of
+// cover, and Uppababy, where no DC can spare stock.
+describe("stockout recovery builder answers", () => {
+  type Opt = { option_id: string; label: string; transfer_units?: number; po_units?: number; stockout_days?: number; lifts_shortage?: boolean;
+    guardrails?: { level: string; message: string }[] };
+  type Plan = { plan_id: string; dc_state: string; recommended: string; options: Opt[]; do_nothing?: { stockout_days?: number }; campaign_effect?: string };
+  const plan = (name: string) => splitBlock<Plan>(fixture(name).text, "po_plan").block!;
+  const opt = (p: Plan, id: string) => p.options.find((o) => o.option_id === id)!;
+  const tools = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use").map((e) => String(e.data.name));
+
+  it("verifies every unit, day and AUD figure it wrote against its tools", () => {
+    for (const name of ["supply_rascal", "supply_rascal6", "supply_uppababy"]) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "po_plan");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("po_plan", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("builds once, writes a draft and never approves", () => {
+    for (const name of ["supply_rascal", "supply_rascal6", "supply_uppababy"]) {
+      const t = tools(name);
+      expect(t.filter((x) => x === "BuildRecoveryPlan")).toHaveLength(1);
+      expect(t.indexOf("StockoutEvidence")).toBeLessThan(t.indexOf("BuildRecoveryPlan"));
+      expect(plan(name).plan_id).toMatch(/^RCV-\d{11}$/);
+    }
+  });
+
+  it("recovers Rascal + Friends NSW with a VIC transfer now and a PO behind it, which lifts the campaign block", () => {
+    const p = plan("supply_rascal");
+    expect(p.dc_state).toBe("NSW");
+    expect(p.recommended).toBe("C");
+    expect(opt(p, "C").transfer_units).toBeGreaterThan(0);
+    expect(opt(p, "C").po_units).toBeGreaterThan(0);
+    expect(opt(p, "C").lifts_shortage).toBe(true);
+    // The PO alone is too slow to lift the block, and the supplier's fill rate is flagged.
+    expect(opt(p, "B").lifts_shortage).toBe(false);
+    expect(opt(p, "B").guardrails?.some((g) => /38%/.test(g.message))).toBe(true);
+    expect(opt(p, "C").stockout_days!).toBeLessThan(p.do_nothing!.stockout_days!);
+  });
+
+  it("moves more stock for a 6-week target, and still does not rely on a transfer alone", () => {
+    const four = plan("supply_rascal"), six = plan("supply_rascal6");
+    expect(opt(six, "A").transfer_units!).toBeGreaterThan(opt(four, "A").transfer_units!);
+    expect(six.recommended).toBe("C");
+    expect(opt(six, "A").guardrails?.some((g) => /cannot be relied on/.test(g.message))).toBe(true);
+  });
+
+  it("offers an expedited PO when no DC can spare Uppababy, and says the stores stay short", () => {
+    const p = plan("supply_uppababy");
+    expect(opt(p, "A").guardrails?.some((g) => g.level === "BLOCK")).toBe(true);
+    expect(opt(p, "C").label).toMatch(/Expedited/);
+    expect(p.recommended).toBe("C");
+    expect(p.options.every((o) => o.lifts_shortage === false)).toBe(true);
+  });
+
+  it("describes the builder's steps in words", () => {
+    expect(describeInput("StockoutEvidence", { BRAND: "Rascal + Friends", CLASS: "Crawler Nappies", STATE: "NSW" })).toBe("Rascal + Friends · Crawler Nappies · NSW");
+    expect(describeInput("BuildRecoveryPlan", { BRAND: "Rascal + Friends", CLASS: "Crawler Nappies", STATE: "NSW", TARGET_WEEKS: 6 })).toBe("Rascal + Friends · Crawler Nappies · NSW · 6 weeks cover");
+  });
+});
+
 describe("progress trail", () => {
   it("turns the recorded stream into steps that each finish", () => {
     const f = fixture("inv_001");

@@ -114,6 +114,13 @@ export default function CampaignPerformancePage() {
                 {a.status === "OPEN" && (
                   <div className="flex gap-1.5">
                     {a.actionKey === "SUPPRESS_STOCK" && <Button variant="primary" disabled={act.busy} onClick={() => alertAction(a, "SUPPRESS_STOCK")}>Suppress short-store members</Button>}
+                    {/* The other way out: get the stock back. An approved recovery plan lifts the
+                        stores from SHORT, which clears this alert (it reads the live supply position). */}
+                    {a.actionKey === "SUPPRESS_STOCK" && (
+                      <a href={`/replenishment/recovery?q=${encodeURIComponent(`${String(c.PROMOTED_BRAND ?? "")} ${String(c.PROMOTED_CLASS ?? "")} is short and blocking campaign ${id}. Get it back on shelf.`.replace(/\s+/g, " ").trim())}`}>
+                        <Button>Ask Supply to recover stock</Button>
+                      </a>
+                    )}
                     {a.actionKey === "SUPPRESS_GRIEVANCE" && <Button variant="primary" disabled={act.busy} onClick={() => alertAction(a, "SUPPRESS_GRIEVANCE")}>Suppress price complainers</Button>}
                     {a.actionKey === "PAUSE" && status === "LIVE" && <Button variant="danger" disabled={act.busy} onClick={() => alertAction(a, "PAUSE")}><Pause className="h-3.5 w-3.5" />Pause</Button>}
                     {a.actionKey === "INVESTIGATE" && <a href="#investigate"><Button onClick={() => setInvestigate(Date.now())}><Search className="h-3.5 w-3.5" />Investigate</Button></a>}

@@ -10,8 +10,8 @@ import { useCallback, useRef, useState } from "react";
 // the text, and at the end the server's audit row (run id and whether every
 // figure matched a tool result). A follow-up continues the same thread.
 
-export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator";
-export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE";
+export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery";
+export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE" | "SUPPLY_RECOVERY";
 export type StepState = "running" | "success" | "error";
 export type Step = { id: string; name: string; toolType: string; input: unknown; status: StepState; detail?: string; startedAt: number; endedAt?: number };
 export type RunInfo = { runId: string; verified: boolean | null; unmatched: string[]; hasBlock: boolean };

@@ -25,6 +25,7 @@ export interface StockAlert {
   title: string;
   description: string;
   timestamp: string;
+  asOf?: string;
   woc: number;
   action: string;
 }

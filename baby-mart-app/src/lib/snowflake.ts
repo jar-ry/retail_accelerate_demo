@@ -145,6 +145,13 @@ export const AGENTS = {
     label: "Brand Investigator",
     fqn: `${DB}.${SCHEMA_AI}.BRAND_INVESTIGATOR_AGENT`,
   },
+  // Supply Chain's stockout recovery builder (agent/deploy_supply_agents.sql).
+  // It writes DRAFT plans only; a planner approves on /replenishment/recovery.
+  supplyRecovery: {
+    id: "supplyRecovery",
+    label: "Stockout Recovery",
+    fqn: `${DB}.${SCHEMA_AI}.SUPPLY_RECOVERY_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, XCircle, AlertCircle, Info, Clock, Loader2 } from "lucide-react";
+import { AlertTriangle, XCircle, AlertCircle, Info, Clock, Loader2, Bot } from "lucide-react";
 import { useSupplyAlerts } from "@/hooks/useSupplyData";
 
 export default function StockAlertsPage() {
@@ -11,9 +11,11 @@ export default function StockAlertsPage() {
   const warning = alerts.filter((a) => a.type === "warning");
   const info = alerts.filter((a) => a.type === "info");
 
-  function formatTime(ts: string) {
+  function formatTime(ts: string, asOf?: string) {
+    // Measured from the supply clock (SUPPLY_AS_OF, 11 June 2026), not the browser's:
+    // against today's date every alert read as months old.
     const d = new Date(ts);
-    const now = new Date();
+    const now = asOf ? new Date(`${asOf}T23:59:59`) : new Date();
     const diff = Math.round((now.getTime() - d.getTime()) / 60000);
     if (diff < 60) return `${diff}m ago`;
     if (diff < 1440) return `${Math.round(diff / 60)}h ago`;
@@ -51,7 +53,8 @@ export default function StockAlertsPage() {
             </h3>
             <div className="space-y-2">
               {critical.map((a) => (
-                <Link key={a.id} href={`/replenishment/brand/${encodeURIComponent(a.brand)}`} className="block p-4 bg-red-50 border border-red-200 rounded-xl hover:border-red-300 transition-all">
+                <div key={a.id}>
+                <Link href={`/replenishment/brand/${encodeURIComponent(a.brand)}`} className="block p-4 bg-red-50 border border-red-200 rounded-xl hover:border-red-300 transition-all">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -63,10 +66,15 @@ export default function StockAlertsPage() {
                       <div className="mt-2 text-[10px] font-semibold text-red-600 bg-red-100 inline-block px-2 py-0.5 rounded">Action: {a.action}</div>
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-red-500 shrink-0">
-                      <Clock className="w-3 h-3" />{formatTime(a.timestamp)}
+                      <Clock className="w-3 h-3" />{formatTime(a.timestamp, a.asOf)}
                     </div>
                   </div>
                 </Link>
+                <Link href={`/replenishment/recovery?q=${encodeURIComponent(`${a.brand} is running short. Build a recovery plan.`)}`}
+                  className="mt-1.5 ml-1 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:underline">
+                  <Bot className="w-3.5 h-3.5" /> Build a recovery plan
+                </Link>
+                </div>
               ))}
             </div>
           </div>
@@ -91,7 +99,7 @@ export default function StockAlertsPage() {
                       <div className="mt-2 text-[10px] font-semibold text-amber-600 bg-amber-100 inline-block px-2 py-0.5 rounded">Action: {a.action}</div>
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-amber-500 shrink-0">
-                      <Clock className="w-3 h-3" />{formatTime(a.timestamp)}
+                      <Clock className="w-3 h-3" />{formatTime(a.timestamp, a.asOf)}
                     </div>
                   </div>
                 </Link>
@@ -119,7 +127,7 @@ export default function StockAlertsPage() {
                       <div className="mt-2 text-[10px] font-semibold text-blue-600 bg-blue-100 inline-block px-2 py-0.5 rounded">Action: {a.action}</div>
                     </div>
                     <div className="flex items-center gap-1 text-[10px] text-blue-400 shrink-0">
-                      <Clock className="w-3 h-3" />{formatTime(a.timestamp)}
+                      <Clock className="w-3 h-3" />{formatTime(a.timestamp, a.asOf)}
                     </div>
                   </div>
                 </Link>

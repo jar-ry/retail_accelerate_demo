@@ -166,7 +166,7 @@ export default function DifotLandingPage() {
                   <td className={`py-2 ${getDifotColor(b.diPct)}`}>{b.diPct}%</td>
                   <td className={`py-2 ${getDifotColor(b.otPct)}`}>{b.otPct}%</td>
                   <td className="py-2 text-slate-400">{b.orders}</td>
-                  <td className="py-2"><Link href={`/replenishment/planning/difot/${encodeURIComponent(b.brand)}`}><ArrowRight className="w-4 h-4 text-slate-400 hover:text-emerald-600" /></Link></td>
+                  <td className="py-2"><Link href={`/replenishment/difot/${encodeURIComponent(b.brand)}`}><ArrowRight className="w-4 h-4 text-slate-400 hover:text-emerald-600" /></Link></td>
                 </tr>
               ))}
             </tbody>

@@ -332,6 +332,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/replenishment/difot" icon={Truck} label="Supplier DIFOT" color="emerald" />
                   <NavItem href="/replenishment/reorder" icon={ClipboardList} label="Purchase Orders" color="emerald" />
                   <NavItem href="/replenishment/alerts" icon={AlertTriangle} label="Alerts" color="emerald" />
+                  <NavItem href="/replenishment/recovery" icon={Bot} label="Stockout Recovery" color="emerald" />
                   <SectionLabel>Planning &amp; Demand</SectionLabel>
                   <NavItem href="/replenishment/planning/demand" icon={TrendingUp} label="Demand Forecast" color="emerald" />
                   <NavItem href="/replenishment/planning/difot" icon={Scale} label="DIFOT Breakdown" color="emerald" />

@@ -9,7 +9,7 @@
 
 import { verifyCitations } from "../ai/grounded";
 
-export type BlockTag = "campaign" | "ideas" | "rca" | "scenario";
+export type BlockTag = "campaign" | "ideas" | "rca" | "scenario" | "po_plan";
 
 export type Split<T> = {
   /** Text before the block: the agent sometimes narrates ("Now the charts.") first. */
@@ -86,6 +86,19 @@ function citedAndProse(tag: BlockTag, block: unknown): { cited: string[]; prose:
     prose.push(String(b.headline ?? ""), String(b.impact ?? ""), String(b.learning ?? ""), ...strs(b.causal_chain), ...strs(b.ruled_out));
     for (const h of (Array.isArray(b.hypotheses) ? b.hypotheses : []) as Rec[]) prose.push(String(h.evidence ?? ""));
     for (const a of (Array.isArray(b.actions) ? b.actions : []) as Rec[]) prose.push(String(a.action ?? ""));
+  } else if (tag === "po_plan") {
+    // A recovery plan's option figures are raw numbers the card formats: money
+    // keys end _aud, the rest are units, days and weeks.
+    prose.push(String(b.goal ?? ""), String(b.situation ?? ""), String(b.rationale ?? ""), String(b.campaign_effect ?? ""));
+    const money = (k: string) => k.endsWith("_aud");
+    const opts = [...(Array.isArray(b.options) ? (b.options as Rec[]) : []), ...(b.do_nothing ? [b.do_nothing as Rec] : [])];
+    for (const o of opts) {
+      for (const k of ["transfer_units", "po_units", "stockout_days", "cover_after_weeks", "lost_sales_aud", "transfer_cost_aud", "stock_value_aud"]) {
+        if (typeof o[k] === "number") cited.push(money(k) ? `AUD ${o[k]}` : String(o[k]));
+      }
+      prose.push(String(o.label ?? ""));
+      for (const g of (Array.isArray(o.guardrails) ? o.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
+    }
   } else if (tag === "scenario") {
     // A scenario's deltas are money (or points, for the GP rate), written as raw
     // numbers the card formats, so they are checked as such.
