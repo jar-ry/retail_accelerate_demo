@@ -37,8 +37,15 @@ export const tagFor = (stage: AgentStage): BlockTag =>
 export async function logAgentRun(o: {
   stage: AgentStage; agentFqn: string; campaignId: unknown; question: string; text: string;
   steps: AgentStep[]; results: ToolResult[]; threadId: number | null; user: string; error: string | null; streamed: boolean;
+  cortexRunId?: string | null;
 }): Promise<{ runId: string; verified: boolean | null; unmatched: string[]; hasBlock: boolean }> {
-  const runId = `AG-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  // A Cortex run can be streamed by more than one request -- the one that
+  // started it and one that resumed it after the connection dropped -- so its
+  // row is keyed on the run id and written once. A row that recorded an error
+  // gives way to a later, clean read of the same run.
+  const runId = o.cortexRunId && /^\d{1,20}-\d{1,20}$/.test(o.cortexRunId)
+    ? `AG-${o.cortexRunId}`
+    : `AG-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const tag = tagFor(o.stage);
   const s = splitBlock(o.text, tag);
   // Without the streamed tool results (the local SQL fallback) there is nothing
@@ -50,9 +57,18 @@ export async function logAgentRun(o: {
     steps: o.steps.map((x) => ({ name: x.name, type: x.toolType, input: x.input, status: x.status ?? null })),
   };
   await q(
-    `INSERT INTO ${S}.AI_RUN (RUN_ID, STAGE, CAMPAIGN_ID, TEMPLATE_KEY, MODEL, QUESTION, GROUNDING_PAYLOAD, PROMPT_CHARS, RESPONSE,
+    `MERGE INTO ${S}.AI_RUN t
+     USING (SELECT ? RUN_ID, ? STAGE, ? CAMPAIGN_ID, ? TEMPLATE_KEY, ? MODEL, ? QUESTION, PARSE_JSON(?) GROUNDING_PAYLOAD,
+                   ? PROMPT_CHARS, PARSE_JSON(?) RESPONSE, PARSE_JSON(?) FIGURES_CITED, PARSE_JSON(?) UNVERIFIED_FIGURES,
+                   ? IS_VERIFIED, ? ERROR_MESSAGE, ? GENERATED_BY) s
+     ON t.RUN_ID = s.RUN_ID
+     WHEN MATCHED AND t.ERROR_MESSAGE IS NOT NULL AND s.ERROR_MESSAGE IS NULL THEN UPDATE SET
+       GROUNDING_PAYLOAD = s.GROUNDING_PAYLOAD, RESPONSE = s.RESPONSE, UNVERIFIED_FIGURES = s.UNVERIFIED_FIGURES,
+       IS_VERIFIED = s.IS_VERIFIED, ERROR_MESSAGE = NULL
+     WHEN NOT MATCHED THEN INSERT (RUN_ID, STAGE, CAMPAIGN_ID, TEMPLATE_KEY, MODEL, QUESTION, GROUNDING_PAYLOAD, PROMPT_CHARS, RESPONSE,
        FIGURES_CITED, UNVERIFIED_FIGURES, IS_VERIFIED, ERROR_MESSAGE, GENERATED_BY, GENERATED_AT)
-     SELECT ?, ?, ?, ?, ?, ?, PARSE_JSON(?), ?, PARSE_JSON(?), PARSE_JSON(?), PARSE_JSON(?), ?, ?, ?, ${NOW}`,
+     VALUES (s.RUN_ID, s.STAGE, s.CAMPAIGN_ID, s.TEMPLATE_KEY, s.MODEL, s.QUESTION, s.GROUNDING_PAYLOAD, s.PROMPT_CHARS, s.RESPONSE,
+       s.FIGURES_CITED, s.UNVERIFIED_FIGURES, s.IS_VERIFIED, s.ERROR_MESSAGE, s.GENERATED_BY, ${NOW})`,
     [runId, o.stage, cid, tag.toUpperCase(), `agent:${o.agentFqn.split(".").pop()}`, o.question.slice(0, 2000),
       JSON.stringify(toolPayload(o.results)).slice(0, 4_000_000), o.question.length, JSON.stringify(response), JSON.stringify([]),
       JSON.stringify(v?.unmatched ?? []), v ? v.verified : null, o.error ?? s.error ?? (s.block ? null : `The answer had no ${tag} block.`), o.user],

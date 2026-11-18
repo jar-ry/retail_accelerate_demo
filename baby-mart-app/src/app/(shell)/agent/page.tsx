@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Bot, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { streamAgentChat } from "@/components/agent/agentStream";
 
 interface TableBlock {
   title: string;
@@ -167,43 +168,17 @@ export default function AgentPage() {
     setStatus("");
 
     try {
-      const res = await fetch("/api/agent/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Placeholder that the streamed tokens are appended to.
+      setMessages((prev) => [...prev, { role: "assistant", content: "", tables: [] }]);
+
+      await streamAgentChat(
+        {
           message: userMsg,
           threadId: threadId.current,
           parentMessageId: parentMessageId.current,
           agent: profile.id,
-        }),
-      });
-      if (!res.body) throw new Error("No response stream");
-
-      // Placeholder that the streamed tokens are appended to.
-      setMessages((prev) => [...prev, { role: "assistant", content: "", tables: [] }]);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, nl).trim();
-          buffer = buffer.slice(nl + 1);
-          if (!line) continue;
-
-          let event: Record<string, any>;
-          try {
-            event = JSON.parse(line);
-          } catch {
-            continue;
-          }
-
+        },
+        (event) => {
           if (event.type === "text") {
             setStatus("");
             appendToLast((m) => ({ ...m, content: m.content + event.text }));
@@ -214,6 +189,9 @@ export default function AgentPage() {
           } else if (event.type === "parent") {
             // Anchor the next turn to this assistant message.
             parentMessageId.current = event.messageId;
+          } else if (event.type === "reset") {
+            // Read back whole from the thread after the stream was lost.
+            appendToLast((m) => ({ ...m, content: "", tables: [] }));
           } else if (event.type === "table") {
             appendToLast((m) => ({
               ...m,
@@ -228,8 +206,8 @@ export default function AgentPage() {
               content: m.content + `\n\n_${event.message}_`,
             }));
           }
-        }
-      }
+        },
+      );
 
       // Guard against a stream that closed without producing any answer.
       appendToLast((m) =>
@@ -237,11 +215,11 @@ export default function AgentPage() {
           ? m
           : { ...m, content: "I couldn't generate a response." },
       );
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, I encountered an error. Please try again." },
-      ]);
+    } catch (e) {
+      appendToLast((m) => ({
+        ...m,
+        content: (m.content ? m.content + "\n\n" : "") + `_${e instanceof Error ? e.message : "Sorry, I encountered an error. Please try again."}_`,
+      }));
     } finally {
       setLoading(false);
       setStatus("");

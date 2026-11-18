@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { streamAgentChat } from "./agentStream";
 
 // ─── One agent run, streamed ──────────────────────────────────────────────────
 //
@@ -8,7 +9,8 @@ import { useCallback, useRef, useState } from "react";
 // trail and the answer cards render: each tool call as a step that runs and then
 // succeeds or fails, the status line, a tail of the model's thinking, charts,
 // the text, and at the end the server's audit row (run id and whether every
-// figure matched a tool result). A follow-up continues the same thread.
+// figure matched a tool result). A follow-up continues the same thread. A
+// dropped connection reconnects to the same run (agentStream.ts).
 
 export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery" | "supplierDifot" | "negotiationBrief" | "hopSandbox";
 export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE" | "SUPPLY_RECOVERY" | "SUPPLY_DIFOT" | "CATEGORY_BRIEF" | "HOP_SANDBOX";
@@ -42,6 +44,7 @@ type Event =
   | ({ type: "run" } & RunInfo)
   | { type: "error"; message: string }
   | { type: "done" }
+  | { type: "reset" }
   | { type: "table" };
 
 /** Apply one event to the turn in progress. Pure, so it is tested on recorded runs. */
@@ -67,6 +70,10 @@ export function applyEvent(t: Turn, e: Event, now = Date.now()): Turn {
       return { ...t, run: { runId: e.runId, verified: e.verified, unmatched: e.unmatched ?? [], hasBlock: e.hasBlock } };
     case "error":
       return { ...t, error: e.message };
+    case "reset":
+      // The run was read back from its thread after the stream was lost, and
+      // arrives whole; what had streamed so far is replaced, not added to.
+      return { ...t, text: "", steps: [], charts: [], thinking: undefined };
     case "done":
       return { ...t, done: true, status: undefined, steps: t.steps.map((s) => (s.status === "running" ? { ...s, status: "error" } : s)) };
     default:
@@ -95,32 +102,11 @@ export function useAgentRun(agent: AgentId, context: { stage?: AgentStageId; cam
       setTurns((ts) => [...ts.slice(0, -1), snap]);
     };
     try {
-      const res = await fetch("/api/agent/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent, message: q, threadId: thread.current.threadId, parentMessageId: thread.current.parent,
-          stage: ctx.current.stage, campaignId: ctx.current.campaignId ?? null }),
-      });
-      if (!res.body) throw new Error(`The agent did not answer (HTTP ${res.status}).`);
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
-          buf = buf.slice(nl + 1);
-          if (!line) continue;
-          try {
-            push(JSON.parse(line) as Event);
-          } catch {
-            /* a partial line is completed by the next chunk */
-          }
-        }
-      }
+      await streamAgentChat(
+        { agent, message: q, threadId: thread.current.threadId, parentMessageId: thread.current.parent,
+          stage: ctx.current.stage, campaignId: ctx.current.campaignId ?? null },
+        (e) => push(e as Event),
+      );
     } catch (e) {
       push({ type: "error", message: e instanceof Error ? e.message : "The request failed." });
     } finally {
