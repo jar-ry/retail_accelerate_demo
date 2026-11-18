@@ -12,8 +12,8 @@ import { streamAgentChat } from "./agentStream";
 // figure matched a tool result). A follow-up continues the same thread. A
 // dropped connection reconnects to the same run (agentStream.ts).
 
-export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery" | "supplierDifot" | "negotiationBrief" | "hopSandbox";
-export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE" | "SUPPLY_RECOVERY" | "SUPPLY_DIFOT" | "CATEGORY_BRIEF" | "HOP_SANDBOX";
+export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery" | "supplierDifot" | "negotiationBrief" | "hopSandbox" | "npsInvestigator";
+export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE" | "SUPPLY_RECOVERY" | "SUPPLY_DIFOT" | "CATEGORY_BRIEF" | "HOP_SANDBOX" | "NPS_INVESTIGATE";
 export type StepState = "running" | "success" | "error";
 export type Step = { id: string; name: string; toolType: string; input: unknown; status: StepState; detail?: string; startedAt: number; endedAt?: number };
 export type RunInfo = { runId: string; verified: boolean | null; unmatched: string[]; hasBlock: boolean };

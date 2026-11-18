@@ -173,6 +173,14 @@ export const AGENTS = {
     label: "Negotiation Brief",
     fqn: `${DB}.${SCHEMA_AI}.NEGOTIATION_BRIEF_AGENT`,
   },
+  // The NPS analyst's investigator lives with its data in the sentiment schema
+  // (agent/deploy_sentiment_agents.sql), resolved the way
+  // src/lib/sentiment/schema.ts resolves the schema.
+  npsInvestigator: {
+    id: "npsInvestigator",
+    label: "NPS Investigator",
+    fqn: `${process.env.SENTIMENT_SCHEMA?.trim() || `${DB}.SENTIMENT`}.NPS_INVESTIGATOR_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

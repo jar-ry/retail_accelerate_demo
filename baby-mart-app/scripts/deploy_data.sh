@@ -139,6 +139,11 @@ SCRIPTS=(
   "$APP_DIR/sql/27_category_semantic_view.sql"           # category semantic view (class, store, region)
   "$APP_DIR/sql/48_negotiation_brief.sql"                # Negotiation Brief tools + briefs
   "$APP_DIR/agent/deploy_brand_agents.sql"               # BRAND_INVESTIGATOR_AGENT + NEGOTIATION_BRIEF_AGENT
+  # NPS Analyst: after the campaign voice (40-44) and the supply position (46).
+  "$APP_DIR/sql/50_sentiment_health.sql"                 # SENTIMENT schema: voice, weekly health, supply, inbound, Analyst + Search
+  "$APP_DIR/sql/51_sentiment_agent_tools.sql"            # NPS Investigator tools
+  "$APP_DIR/sql/52_sentiment_risk.sql"                   # sentiment risk model (Snowflake ML) + forward forecast (~2 min)
+  "$APP_DIR/agent/deploy_sentiment_agents.sql"           # NPS_INVESTIGATOR_AGENT
 )
 
 echo "=============================================="

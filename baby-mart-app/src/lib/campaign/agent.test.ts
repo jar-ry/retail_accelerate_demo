@@ -599,3 +599,76 @@ describe("agent tools", () => {
     expect(createDraft(run, brief({ name: "" }), spec, "")).toMatchObject({ ok: false, error: expect.stringMatching(/needs a name/) });
   });
 });
+
+// Recorded runs of the NPS Analyst's investigator on canonical
+// (agent/deploy_sentiment_agents.sql, tools sql/51): NSW in late April (the
+// Rascal + Friends stockout, amplified by camp-001), the national slide since
+// February (Gold & Platinum members on price) and WA delivery complaints
+// (running since March, with nothing in the operations data behind them).
+describe("NPS investigator answers", () => {
+  type Rca = { headline: string; confidence: string; hypotheses: { hypothesis: string; verdict: string; evidence: string }[];
+    actions: { owner: string; action: string; recovery_prompt?: string | null }[] };
+  const rca = (name: string) => splitBlock<Rca>(fixture(name).text, "rca").block!;
+  const verdict = (b: Rca, re: RegExp) => b.hypotheses.find((h) => re.test(h.hypothesis))?.verdict;
+  const uses = (name: string, tool: string) => fixture(name).events.filter((e) => e.event === "response.tool_use" && e.data.name === tool);
+  const tested = (name: string) => uses(name, "TestNpsCause").map((e) => String((e.data.input as { DIMENSION?: string }).DIMENSION));
+
+  it("verifies every figure it wrote against its tools", () => {
+    for (const name of ["nps_nsw", "nps_national", "nps_wa"]) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "rca");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("rca", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("starts from the evidence and tests every operational cause, not just the one asked about", () => {
+    for (const name of ["nps_nsw", "nps_national", "nps_wa"]) {
+      const first = fixture(name).events.find((e) => e.event === "response.tool_use")!;
+      expect(["NpsEvidence", "TestNpsCause"]).toContain(String(first.data.name));
+      expect(uses(name, "NpsEvidence").length).toBeGreaterThanOrEqual(1);
+      for (const d of ["stock", "campaign", "supply", "delivery", "price", "app", "quality"]) expect(tested(name)).toContain(d);
+    }
+  });
+
+  it("traces NSW to the Rascal + Friends stockout, amplified by camp-001, and hands off to Stockout Recovery", () => {
+    const b = rca("nps_nsw");
+    expect(b.headline).toMatch(/Rascal \+ Friends/);
+    expect(b.confidence).toBe("High");
+    expect(verdict(b, /stock ?out|stock\b/i)).toBe("CONFIRMED");
+    expect(verdict(b, /campaign/i)).toBe("CONFIRMED");
+    expect(verdict(b, /supplier|supply|DIFOT/i)).toBe("CONFIRMED");
+    expect(verdict(b, /price/i)).toBe("RULED_OUT");
+    expect(verdict(b, /store/i)).toBe("RULED_OUT");
+    expect(b.actions.some((a) => a.owner === "Supply" && /Rascal/.test(a.recovery_prompt ?? ""))).toBe(true);
+    expect(b.actions.some((a) => a.owner === "CRM" && /camp-001/.test(a.action))).toBe(true);
+  });
+
+  it("puts the national slide on Gold & Platinum members and value, not on stock", () => {
+    const b = rca("nps_national");
+    expect(b.headline).toMatch(/Gold & Platinum/);
+    expect(verdict(b, /tier/i)).toBe("CONFIRMED");
+    expect(verdict(b, /price/i)).toBe("CONFIRMED");
+    expect(verdict(b, /out of stock|stock/i)).toBe("RULED_OUT");
+    // The question gives the period, so it is passed through.
+    expect((uses("nps_national", "NpsEvidence")[0].data.input as { START_DATE: string }).START_DATE).toBe("2026-02-02");
+  });
+
+  it("finds WA delivery complaints began in March and says operations cannot confirm a cause", () => {
+    const b = rca("nps_wa");
+    expect(b.headline).toMatch(/delivery/i);
+    expect(b.confidence).not.toBe("High");
+    expect(verdict(b, /delivery op|operations/i) ?? verdict(b, /^delivery/i)).toBe("INCONCLUSIVE");
+    expect(verdict(b, /stock/i)).toBe("RULED_OUT");
+    // It re-ran from when the complaints began rather than calling them steady.
+    expect(uses("nps_wa", "NpsEvidence").some((e) => (e.data.input as { START_DATE: string }).START_DATE === "2026-03-02")).toBe(true);
+  });
+
+  it("describes the investigator's steps in words", () => {
+    expect(describeInput("NpsEvidence", { SCOPE: "NSW", START_DATE: "", END_DATE: "" })).toBe("NSW");
+    expect(describeInput("NpsEvidence", { SCOPE: "ALL", START_DATE: "2026-02-02", END_DATE: "2026-04-26" })).toBe("all stores · 2026-02-02 → 2026-04-26");
+    expect(describeInput("TestNpsCause", { SCOPE: "WA", START_DATE: "2026-03-02", END_DATE: "", DIMENSION: "delivery" })).toBe("WA · 2026-03-02 → 7 May · test delivery");
+  });
+});

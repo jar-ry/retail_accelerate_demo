@@ -33,5 +33,7 @@ profile:
 #     value: TEMP.JARCHEN_HEAD_OF_PLANNING
 #   - name: CAMPAIGN_SCHEMA
 #     value: TEMP.JARCHEN_CAMPAIGN
+#   - name: SENTIMENT_SCHEMA
+#     value: TEMP.JARCHEN_SENTIMENT
 #   - name: SNOWFLAKE_WAREHOUSE
 #     value: MNEGLAY_XS

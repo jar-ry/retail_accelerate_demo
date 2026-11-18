@@ -10,7 +10,7 @@ import {
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
   ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
-  PenTool, BookOpen,
+  PenTool, BookOpen, Activity, Map as MapIcon, Radar,
 } from "lucide-react";
 
 const categories = [
@@ -29,7 +29,7 @@ const topBrands = [
   { name: "Maxi-Cosi", slug: "Maxi-Cosi" },
 ];
 
-type Persona = "category" | "supply" | "campaign" | "planning" | "hop";
+type Persona = "category" | "supply" | "campaign" | "planning" | "hop" | "nps";
 
 // Persona metadata as a lookup rather than parallel ternary chains. Adding the
 // planning persona to the previous shape meant a fourth branch in each of three
@@ -96,9 +96,18 @@ const PERSONAS: Record<
     brand: "Baby Mart",
     monogram: "BM",
   },
+  nps: {
+    title: "Customer Sentiment Health",
+    role: "NPS Analyst",
+    subtitle: "Voice of the customer & NPS",
+    color: "rose",
+    home: "/sentiment",
+    brand: "Baby Mart",
+    monogram: "BM",
+  },
 };
 
-const PERSONA_ORDER: Persona[] = ["category", "supply", "planning", "hop", "campaign"];
+const PERSONA_ORDER: Persona[] = ["category", "supply", "planning", "hop", "campaign", "nps"];
 
 // Route prefix -> persona, so a deep link lands on the right sidebar.
 //
@@ -110,6 +119,7 @@ const PERSONA_ROUTES: [string, Persona][] = [
   ["/planning", "planning"],
   ["/hop", "hop"],
   ["/campaigns", "campaign"],
+  ["/sentiment", "nps"],
 ];
 
 /** Resolve the active persona for a path.
@@ -178,6 +188,14 @@ const PERSONA_STYLES: Record<
     chevron: "text-teal-400",
     menuActive: "bg-teal-50",
   },
+  rose: {
+    navActive: "bg-rose-50 text-rose-800 border-rose-600 font-medium",
+    chip: "bg-rose-50 border-rose-200",
+    chipText: "text-rose-700",
+    chipSub: "text-rose-500",
+    chevron: "text-rose-400",
+    menuActive: "bg-rose-50",
+  },
 };
 
 // The sidebar monogram tile, per persona. Literal classes for the same reason as
@@ -185,6 +203,7 @@ const PERSONA_STYLES: Record<
 const MONOGRAM_TILE: Partial<Record<Persona, string>> = {
   planning: "bg-violet-700",
   hop: "bg-teal-700",
+  nps: "bg-rose-700",
 };
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -383,6 +402,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/hop/approve" icon={Lock} label="Approve & lock" color="teal" />
                   <NavItem href="/hop/ownership" icon={ShieldCheck} label="Ownership" color="teal" />
                   <NavItem href="/hop/settings" icon={Settings} label="Settings" color="teal" />
+                </>
+              ) : persona === "nps" ? (
+                <>
+                  {/* Detect, locate, drill, explain, predict: the order an NPS
+                      analyst works a sentiment break. */}
+                  <NavItem href="/sentiment" icon={Activity} label="Pulse" color="rose" />
+                  <SectionLabel>Find it</SectionLabel>
+                  <NavItem href="/sentiment/map" icon={MapIcon} label="State map" color="rose" />
+                  <NavItem href="/sentiment/store" icon={Store} label="Store 360" color="rose" />
+                  <SectionLabel>Explain &amp; predict</SectionLabel>
+                  <NavItem href="/sentiment/investigate" icon={Bot} label="NPS Investigator" color="rose" />
+                  <NavItem href="/sentiment/risk" icon={Radar} label="Risk radar" color="rose" />
                 </>
               ) : (
                 <>
