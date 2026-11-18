@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Bot } from "lucide-react";
 import { PageHeader, Card, Pill, Loading } from "../_components/ui";
 import { StageStrip } from "../_components/shared";
-import { AgentPanel } from "../_components/agent/AgentPanel";
+import { AgentPanel } from "@/components/agent/AgentPanel";
+import { CampaignCard, type CampaignBlock } from "../_components/CampaignCard";
 
 // ─── Campaign Builder ─────────────────────────────────────────────────────────
 //
@@ -44,6 +45,7 @@ function Builder() {
         </ol>
       </Card>
       <AgentPanel agent="campaignBuilder" tag="campaign" stage="BUILDER" samples={SAMPLES} autoAsk={q}
+        card={(b, t) => <CampaignCard c={b as CampaignBlock} run={t.run} />}
         placeholder="Describe the campaign: the goal, the product, dates and budget. Say “create the draft” to save it." />
     </div>
   );

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Loader2, PackageCheck, ArrowRight } from "lucide-react";
-import { Pill, Banner } from "../../campaigns/_components/ui";
-import { RunBadge, EvidenceGrid, type Evidence, type Guardrail } from "../../campaigns/_components/agent/AgentCards";
-import type { RunInfo } from "../../campaigns/_components/agent/useAgentRun";
+import { Pill, Banner } from "@/components/ui/kit";
+import { RunBadge, EvidenceGrid, type Evidence, type Guardrail } from "@/components/agent/AgentCards";
+import type { RunInfo } from "@/components/agent/useAgentRun";
 
 // ─── The Stockout Recovery agent's answer ─────────────────────────────────────
 //

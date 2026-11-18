@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Bot } from "lucide-react";
-import { AgentPanel } from "../campaigns/_components/agent/AgentPanel";
+import { AgentPanel } from "@/components/agent/AgentPanel";
 
 // ─── Brand Investigator ───────────────────────────────────────────────────────
 //

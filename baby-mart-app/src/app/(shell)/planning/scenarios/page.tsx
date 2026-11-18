@@ -7,7 +7,7 @@ import {
   RotateCcw, Sparkles, Trash2, CheckCircle2, XCircle, PencilLine,
   Loader2, Grid3x3, Brain, AlertTriangle, Bot,
 } from "lucide-react";
-import { AgentPanel } from "../../campaigns/_components/agent/AgentPanel";
+import { AgentPanel } from "@/components/agent/AgentPanel";
 import {
   Breadcrumb, PageHeader, KpiCard, Card, CurrencyToggle,
   Loading, ErrorState, Th, Td,

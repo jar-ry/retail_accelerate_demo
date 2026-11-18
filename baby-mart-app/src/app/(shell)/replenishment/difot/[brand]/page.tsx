@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ChevronRight, Loader2, ArrowRight } from "lucide-react";
+import { ChevronRight, Loader2, ArrowRight, Bot } from "lucide-react";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -126,12 +126,20 @@ export default function SupplierDifotBrandPage() {
           <h1 className="text-xl font-bold text-slate-900">{brand} — Supplier DIFOT</h1>
           <p className="text-xs text-slate-500 mt-0.5">Delivery In Full On Time — by product SKU</p>
         </div>
-        <Link
-          href={`/replenishment/brand/${encodeURIComponent(brand)}`}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-xs font-semibold hover:bg-emerald-800"
-        >
-          Full Brand Detail <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/replenishment/investigate?q=${encodeURIComponent(`Why is ${brand} missing DIFOT, and is it the supplier or us?`)}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-teal-200 bg-white text-teal-700 rounded-lg text-xs font-semibold hover:bg-teal-50"
+          >
+            <Bot className="w-3.5 h-3.5" /> Investigate
+          </Link>
+          <Link
+            href={`/replenishment/brand/${encodeURIComponent(brand)}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 text-white rounded-lg text-xs font-semibold hover:bg-emerald-800"
+          >
+            Full Brand Detail <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-5 gap-3 mb-6">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Bot, ChevronRight, ChevronDown, Plus, ListChecks } from "lucide-react";
 import { PageHeader, Card, Tile, Loading, ErrorState, Banner, Segmented, Button, Pill, InfoTip, OwnedCell, Th, Td } from "../_components/ui";
@@ -45,6 +45,11 @@ const GRAINS: { value: Grain; label: string }[] = [
 
 export default function StorePlanPage() {
   const [scenarioId, setScenarioId] = useState<number | null>(null);
+  // ?scenario=<id> opens a sandbox directly (the Sandbox builder links here).
+  useEffect(() => {
+    const s = Number(new URLSearchParams(window.location.search).get("scenario"));
+    if (Number.isInteger(s) && s > 0) setScenarioId(s);
+  }, []);
   const { data, error, isLoading } = useHop<Payload>("store-plan", { scenarioId });
   const action = useHopAction("store-plan");
   const [grain, setGrain] = useState<Grain>("MONTH");

@@ -137,6 +137,13 @@ export const AGENTS = {
     label: "Planning Investigator",
     fqn: `${process.env.HOP_SCHEMA?.trim() || `${DB}.HEAD_OF_PLANNING`}.HOP_INVESTIGATOR_AGENT`,
   },
+  // Head of Planning's sandbox builder (agent/deploy_hop_agents.sql): costed
+  // store plan what-ifs as a DRAFT proposal a planner opens as a sandbox.
+  hopSandbox: {
+    id: "hopSandbox",
+    label: "Sandbox Builder",
+    fqn: `${process.env.HOP_SCHEMA?.trim() || `${DB}.HEAD_OF_PLANNING`}.HOP_SANDBOX_AGENT`,
+  },
   // The Category Manager's brand investigator (agent/deploy_brand_agents.sql),
   // beside the category agent in the AI schema. Separate from it for the same
   // reason: an investigator's playbook would blur the text-to-SQL agent's job.
@@ -151,6 +158,20 @@ export const AGENTS = {
     id: "supplyRecovery",
     label: "Stockout Recovery",
     fqn: `${DB}.${SCHEMA_AI}.SUPPLY_RECOVERY_AGENT`,
+  },
+  // Supply Chain's supplier DIFOT investigator (agent/deploy_supply_agents.sql):
+  // what drives a supplier's miss and whether it is the supplier's or ours.
+  supplierDifot: {
+    id: "supplierDifot",
+    label: "DIFOT Investigator",
+    fqn: `${DB}.${SCHEMA_AI}.SUPPLIER_DIFOT_AGENT`,
+  },
+  // Category Manager's negotiation brief builder (agent/deploy_brand_agents.sql):
+  // sized asks for a supplier meeting, as a DRAFT a category manager approves.
+  negotiationBrief: {
+    id: "negotiationBrief",
+    label: "Negotiation Brief",
+    fqn: `${DB}.${SCHEMA_AI}.NEGOTIATION_BRIEF_AGENT`,
   },
 } as const;
 

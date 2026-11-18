@@ -8,10 +8,10 @@ import { FastForward, Pause, Play, Search, Loader2, BookOpen, AlertTriangle, Che
 import { PageHeader, Card, Tile, Loading, ErrorState, Th, Td, Pill, Banner, Button, Modal, Field, inputCls } from "../../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../../_components/useCmp";
 import { StageStrip, StatusPill, Prov, Verified, PLOT_LAYOUT, PLOT_CONFIG, pp, rate } from "../../_components/shared";
-import { AgentPanel } from "../../_components/agent/AgentPanel";
-import { ProgressTrail } from "../../_components/agent/ProgressTrail";
-import { AgentAnswer } from "../../_components/agent/AgentCards";
-import type { Turn } from "../../_components/agent/useAgentRun";
+import { AgentPanel } from "@/components/agent/AgentPanel";
+import { ProgressTrail } from "@/components/agent/ProgressTrail";
+import { AgentAnswer } from "@/components/agent/AgentCards";
+import type { Turn } from "@/components/agent/useAgentRun";
 import { audM, aud, num, toNum, isoDate, isoDateTime } from "@/lib/campaign/format";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });

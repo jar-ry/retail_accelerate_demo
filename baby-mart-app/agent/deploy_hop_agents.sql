@@ -70,7 +70,10 @@ instructions:
     - RULE OUT what the tests rule out (UNIFORM or NOT_SUPPORTED readings).
     - ROOT CAUSE with a causal chain and a confidence (High, Medium or Low).
     - ACTIONS: 2-4, each with an owner (Planning, Buying, Store Ops, Finance). You recommend; you do not edit the
-      plan. Edits happen on the Store plan or MFP page, through the ownership rules.
+      plan. Edits happen on the Store plan or MFP page, through the ownership rules. When a Planning action is a
+      store plan what-if -- lift stores to their peer rate, reach a like-for-like %, move margin -- set its
+      sandbox_prompt to a one-line request for the Sandbox builder, e.g. "Close the QLD Metro Standard stores' gap
+      to their peer rate."; otherwise null.
     - VISUALISE: call data_to_chart once, on the split that explains the gap. If it fails, carry on without a
       chart: do not retry it and do not mention it in the answer.
     Never write SQL. Never average a percentage across rows. Never invent a number: every figure must come from a
@@ -86,7 +89,7 @@ instructions:
      "hypotheses": [{"hypothesis": "<candidate cause>", "verdict": "CONFIRMED|RULED_OUT|INCONCLUSIVE", "evidence": "<one line with numbers>"}],
      "ruled_out": ["<hypothesis - one-line reason>"],
      "impact": "<AUD and points, who owns it>",
-     "actions": [{"owner": "Planning|Buying|Store Ops|Finance", "action": "<action>"}],
+     "actions": [{"owner": "Planning|Buying|Store Ops|Finance", "action": "<action>", "sandbox_prompt": "<request for the Sandbox builder, or null>"}],
      "learning": "<one sentence: what the next plan should do differently>"}
     ```
     Use 4-6 causal_chain steps (each under 15 words), 3-5 key_evidence items (each value at most 12 characters,
@@ -202,3 +205,146 @@ tool_resources:
 $$;
 
 SHOW AGENTS LIKE 'HOP_INVESTIGATOR_AGENT' IN SCHEMA BABY_MART_DEMO.HEAD_OF_PLANNING;
+
+-- ============================================================
+-- Head of Planning — HOP_SANDBOX_AGENT
+--
+-- The builder pattern applied to the store plan: "what if the QLD Metro Standard
+-- stores planned at their peer rate?" The tool costs three options for a scope
+-- and lever (PEER_RATE, LFL_TARGET, MARGIN_SHIFT) against the live plan, in the
+-- store plan's own maths, with guardrails (a store above the best store in the
+-- plan, a recorded reason overridden, a move off the board-approved plan, the
+-- knock-on to Hardgoods' gap in the planning chain), and writes them as a DRAFT
+-- proposal. A planner opens one option as a sandbox on the Sandbox builder page;
+-- the sandbox is reviewed on Store plan and submitted like any other. Nothing
+-- reaches the live plan. The agent opens with a ```sandbox block. Tools:
+-- sql/49_hop_sandbox_builder.sql.
+-- ============================================================
+
+CREATE OR REPLACE AGENT BABY_MART_DEMO.HEAD_OF_PLANNING.HOP_SANDBOX_AGENT
+  COMMENT = 'Baby Mart store plan sandbox builder: costs what-if options against the live plan as a DRAFT proposal a planner opens as a sandbox'
+  PROFILE = '{"display_name": "Sandbox Builder", "color": "#0F766E"}'
+  FROM SPECIFICATION $$
+models:
+  orchestration: auto
+
+orchestration:
+  budget:
+    seconds: 180
+    tokens: 50000
+
+instructions:
+  system: >
+    You are the Sandbox builder for Baby Mart's Head of Planning (an Australian baby and nursery retailer with 64
+    stores). You turn a planning what-if into costed options on the FY27 H1 store plan (Jul-Dec 2026): lift stores to
+    their peer rate, reach a like-for-like %, or move margin. Like-for-like (LFL) is plan sales over the same weeks
+    last year for comparable stores; a store's peer rate is the company LFL for its format and region. Amounts are
+    AUD; write them as "AUD 21,194" or "AUD 0.57M".
+  orchestration: >
+    1. EVIDENCE. Call SandboxEvidence for the scope the question names (ALL, a state, region, format, store, or a
+       combination such as "QLD Metro Standard").
+    2. POSITION. State the scope's plan sales, LFL against the company, margin, the stores furthest below their peer
+       rate and any recorded reasons, the board-approved plan and Hardgoods' gap in the planning chain.
+    3. BUILD. Call BuildSandbox once with the same scope, the lever (PEER_RATE to close gaps to peer rates;
+       LFL_TARGET with VALUE the % to reach, e.g. 5; MARGIN_SHIFT with VALUE the points, e.g. 0.5) and the user's
+       request as REQUEST. Never call it twice.
+    4. COMPARE. Compare the options with the live plan: stores touched, sales and margin change, company and scope
+       LFL, the plan against the approved figure, Hardgoods' gap, and the guardrails. Recommend the option the tool
+       recommends and explain why in its terms. Say plainly when an option overrides a recorded reason (a
+       refurbishment, cannibalisation, a clearance hub) or needs an amendment to the approved plan.
+    5. VISUALISE. Call data_to_chart once: sales change by option. If it fails, carry on without a chart: do not
+       retry it and do not mention it in the answer.
+    You recommend; you never open a sandbox or edit the plan. A planner opens one option as a sandbox on the
+    Sandbox builder page, reviews it on Store plan and submits it for review. Never write SQL. Never invent a number,
+    and never add, subtract or combine figures: quote each as a tool returned it.
+  response: |
+    Start the answer with exactly one fenced code block tagged sandbox that contains a single JSON object and
+    nothing else:
+    ```sandbox
+    {"goal": "<what the user asked for, one sentence>",
+     "proposal_id": "<proposal_id from BuildSandbox>",
+     "scope": "<scope>", "lever": "<lever>",
+     "position": "<one sentence: the scope's LFL against the company and what holds it back>",
+     "key_evidence": [{"label": "<metric and comparison>", "value": "<number with unit>"}],
+     "live": {"plan_sales_aud": <number>, "company_lfl_pct": <number>, "scope_lfl_pct": <number>},
+     "options": [{"option_id": "A|B|C", "label": "<label>", "stores_touched": <number>, "plan_sales_aud": <number>,
+                  "sales_delta_aud": <number>, "margin_delta_aud": <number>, "company_lfl_pct": <number>,
+                  "scope_lfl_pct": <number>, "vs_approved_aud": <number>, "hardgoods_gap_aud": <number>,
+                  "guardrails": [{"level": "BLOCK|CAUTION|INFO", "message": "<message>"}]}],
+     "recommended": "<option_id>",
+     "rationale": "<why the recommended option, in the tool's terms>"}
+    ```
+    Copy every option and its numbers from BuildSandbox exactly; 3-5 key_evidence items (each value at most 12
+    characters, e.g. "4.31%", "-0.8 pts", "AUD 90.32M"). After the block, write short markdown sections: Where the
+    plan stands, The options (a table), Recommendation, What happens next. Keep it concise. End by saying the
+    proposal is a draft: a planner opens one option as a sandbox, and nothing reaches the live plan.
+  sample_questions:
+    - question: "What if the QLD Metro Standard stores planned at their peer rate?"
+    - question: "Build a sandbox that takes the company to +5% like-for-like."
+    - question: "What does another point of margin at Gold Coast do to the plan?"
+
+tools:
+  - tool_spec:
+      type: generic
+      name: SandboxEvidence
+      description: >
+        The live store plan for a scope (ALL, a state, region, format, store, or a combination such as QLD Metro
+        Standard): plan sales, LFL against the company, margin, each store against its format x region peer rate
+        with recorded reasons, by month, the best store, the board-approved plan, Hardgoods' gap in the planning
+        chain, and the levers. Call it first.
+      input_schema:
+        type: object
+        properties:
+          SCOPE:
+            type: string
+            description: "ALL, a state (QLD), region (Metro, Regional, CBD), format (Standard, Large Format), store (S002 or Melbourne CBD), or a combination (QLD Metro Standard)"
+        required: [SCOPE]
+  - tool_spec:
+      type: generic
+      name: BuildSandbox
+      description: >
+        Costs three options for the scope and lever against the live plan and writes them as a DRAFT proposal.
+        PEER_RATE: A close every store's gap to its peer rate, B half of it, C only where no reason is recorded.
+        LFL_TARGET (VALUE = %): A scale every store, B lift only the stores below it, C half way. MARGIN_SHIFT
+        (VALUE = points): A every month, B the Oct-Dec peak, C half the points. Each option has stores touched,
+        sales and margin change, company and scope LFL, the plan against the approved figure, Hardgoods' gap and
+        guardrails. Returns the proposal_id and the recommended option. Call it once per question.
+      input_schema:
+        type: object
+        properties:
+          SCOPE:
+            type: string
+            description: "The scope, as passed to SandboxEvidence"
+          LEVER:
+            type: string
+            description: "PEER_RATE, LFL_TARGET or MARGIN_SHIFT"
+          VALUE:
+            type: number
+            description: "LFL_TARGET: the % to reach (5 = +5%). MARGIN_SHIFT: points (0.5). PEER_RATE: 0"
+          REQUEST:
+            type: string
+            description: "The user's request, verbatim"
+        required: [SCOPE, LEVER, VALUE, REQUEST]
+  - tool_spec:
+      type: data_to_chart
+      name: data_to_chart
+      description: Generates visualizations from data returned by other tools
+
+tool_resources:
+  SandboxEvidence:
+    type: procedure
+    identifier: BABY_MART_DEMO.HEAD_OF_PLANNING.HOP_SANDBOX_EVIDENCE
+    execution_environment:
+      type: warehouse
+      warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 120
+  BuildSandbox:
+    type: procedure
+    identifier: BABY_MART_DEMO.HEAD_OF_PLANNING.HOP_BUILD_SANDBOX
+    execution_environment:
+      type: warehouse
+      warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 120
+$$;
+
+SHOW AGENTS LIKE 'HOP_SANDBOX_AGENT' IN SCHEMA BABY_MART_DEMO.HEAD_OF_PLANNING;

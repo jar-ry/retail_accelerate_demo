@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { Truck, TrendingDown, TrendingUp, Loader2 } from "lucide-react";
+import { Truck, TrendingDown, TrendingUp, Loader2, Bot } from "lucide-react";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -76,7 +76,13 @@ export default function SupplierDifotPage() {
           <Truck className="w-5 h-5 text-blue-700" />
           <h1 className="text-xl font-bold text-slate-900">Supplier DIFOT Performance</h1>
         </div>
-        <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md font-medium">YTD 2026</div>
+        <div className="flex items-center gap-2">
+          <Link href={`/replenishment/investigate?q=${encodeURIComponent("Which suppliers are below the DIFOT target, and is it them or us?")}`}
+            className="flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50">
+            <Bot className="h-3.5 w-3.5" />Is it them or us?
+          </Link>
+          <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-md font-medium">YTD 2026</div>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -141,7 +147,13 @@ export default function SupplierDifotPage() {
                     <Link href={`/replenishment/difot/${encodeURIComponent(b.brand)}`} className="font-medium text-blue-700 hover:underline text-sm">{b.brand}</Link>
                     <div className="text-[10px] text-slate-400">{b.category}</div>
                   </td>
-                  <td className="py-2.5 text-xs text-slate-600">{b.supplier || "—"}</td>
+                  <td className="py-2.5 text-xs text-slate-600">
+                    {b.supplier || "—"}
+                    {b.supplier && b.avgDifot < 96 && (
+                      <Link href={`/replenishment/investigate?q=${encodeURIComponent(`Why is ${b.supplier} missing DIFOT on ${b.brand}?`)}`}
+                        className="ml-1.5 text-[10px] font-medium text-teal-700 hover:underline">Investigate</Link>
+                    )}
+                  </td>
                   <td className={`py-2.5 text-right font-mono font-semibold ${getDifotColor(b.avgDifot)}`}>{b.avgDifot}%</td>
                   <td className={`py-2.5 text-right font-mono text-xs ${getDifotColor(b.diPct || 0)}`}>{b.diPct || "—"}%</td>
                   <td className={`py-2.5 text-right font-mono text-xs ${getDifotColor(b.otPct || 0)}`}>{b.otPct || "—"}%</td>

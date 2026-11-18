@@ -7,9 +7,9 @@ import { Sparkles, Loader2, Check, X, ShieldAlert, Bot } from "lucide-react";
 import { PageHeader, Card, Loading, ErrorState, Pill, Banner, Button, Modal, Field, inputCls, Th, Td, InfoTip } from "../_components/ui";
 import { useCmp, useCmpAction, parse, type Row } from "../_components/useCmp";
 import { StageStrip, Verified, Prov } from "../_components/shared";
-import { AgentPanel } from "../_components/agent/AgentPanel";
-import type { IdeaBlock } from "../_components/agent/AgentCards";
-import type { Turn } from "../_components/agent/useAgentRun";
+import { AgentPanel } from "@/components/agent/AgentPanel";
+import type { IdeaBlock } from "@/components/agent/AgentCards";
+import type { Turn } from "@/components/agent/useAgentRun";
 import { CHANNEL_LABEL, type ChannelCode } from "@/lib/campaign/config";
 import { num, toNum, isoDateTime } from "@/lib/campaign/format";
 

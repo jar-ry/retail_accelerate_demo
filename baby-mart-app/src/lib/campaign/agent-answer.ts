@@ -9,7 +9,7 @@
 
 import { verifyCitations } from "../ai/grounded";
 
-export type BlockTag = "campaign" | "ideas" | "rca" | "scenario" | "po_plan";
+export type BlockTag = "campaign" | "ideas" | "rca" | "scenario" | "po_plan" | "brief" | "sandbox";
 
 export type Split<T> = {
   /** Text before the block: the agent sometimes narrates ("Now the charts.") first. */
@@ -96,6 +96,33 @@ function citedAndProse(tag: BlockTag, block: unknown): { cited: string[]; prose:
       for (const k of ["transfer_units", "po_units", "stockout_days", "cover_after_weeks", "lost_sales_aud", "transfer_cost_aud", "stock_value_aud"]) {
         if (typeof o[k] === "number") cited.push(money(k) ? `AUD ${o[k]}` : String(o[k]));
       }
+      prose.push(String(o.label ?? ""));
+      for (const g of (Array.isArray(o.guardrails) ? o.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
+    }
+  } else if (tag === "brief") {
+    // A negotiation brief's asks and totals are raw AUD numbers the card formats.
+    prose.push(String(b.goal ?? ""), String(b.position ?? ""), ...strs(b.play));
+    const money = (o: Rec) => { for (const k of ["opening_aud", "target_aud", "walkaway_aud", "gives_aud"]) if (typeof o[k] === "number") cited.push(`AUD ${o[k]}`); };
+    for (const a of (Array.isArray(b.asks) ? b.asks : []) as Rec[]) {
+      money(a);
+      prose.push(String(a.label ?? ""), String(a.basis ?? ""));
+      for (const g of (Array.isArray(a.guardrails) ? a.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
+    }
+    if (b.totals && typeof b.totals === "object") money(b.totals as Rec);
+    for (const l of (Array.isArray(b.levers) ? b.levers : []) as Rec[]) prose.push(String(l.label ?? ""), String(l.basis ?? ""));
+    for (const g of (Array.isArray(b.guardrails) ? b.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
+  } else if (tag === "sandbox") {
+    // A store plan sandbox's options: AUD keys end _aud, percentages _pct.
+    prose.push(String(b.goal ?? ""), String(b.position ?? ""), String(b.rationale ?? ""));
+    const fig = (o: Rec) => {
+      for (const k of Object.keys(o)) {
+        if (typeof o[k] !== "number" || k === "stores_touched") continue;
+        cited.push(k.endsWith("_aud") ? `AUD ${o[k]}` : k.endsWith("_pct") ? `${o[k]}%` : String(o[k]));
+      }
+    };
+    if (b.live && typeof b.live === "object") fig(b.live as Rec);
+    for (const o of (Array.isArray(b.options) ? b.options : []) as Rec[]) {
+      fig(o);
       prose.push(String(o.label ?? ""));
       for (const g of (Array.isArray(o.guardrails) ? o.guardrails : []) as Rec[]) prose.push(String(g.message ?? ""));
     }

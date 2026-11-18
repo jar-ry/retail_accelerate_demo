@@ -185,3 +185,139 @@ tool_resources:
 $$;
 
 SHOW AGENTS LIKE 'BRAND_INVESTIGATOR_AGENT' IN SCHEMA BABY_MART_DEMO.AI;
+
+-- ============================================================
+-- Category Manager — NEGOTIATION_BRIEF_AGENT
+--
+-- The builder pattern applied to a supplier meeting: "build me a negotiation
+-- brief for Huggies". The tool sizes each ask from the data -- closing the margin
+-- gap to the category, promo co-funding, a DIFOT credit on the supplier's own
+-- misses -- with opening, target and walk-away values, offers gives (waiving the
+-- DIFOT misses that were Baby Mart's ordering, per the DIFOT investigator), and
+-- lists non-money levers and guardrails. It writes a DRAFT brief; a category
+-- manager approves it for the meeting on the Negotiation brief page. The agent
+-- opens with a ```brief block. Tools: sql/48_negotiation_brief.sql.
+-- ============================================================
+
+CREATE OR REPLACE AGENT BABY_MART_DEMO.AI.NEGOTIATION_BRIEF_AGENT
+  COMMENT = 'Baby Mart negotiation brief builder: sizes margin, promo and DIFOT asks for a supplier meeting as a DRAFT brief for a category manager to approve'
+  PROFILE = '{"display_name": "Negotiation Brief", "color": "#1D4ED8"}'
+  FROM SPECIFICATION $$
+models:
+  orchestration: auto
+
+orchestration:
+  budget:
+    seconds: 180
+    tokens: 50000
+
+instructions:
+  system: >
+    You are the Negotiation Brief builder for Baby Mart's category managers (an Australian baby and nursery retailer).
+    You prepare a brief for a meeting with a brand's supplier: what to ask for, what each ask is worth, where to
+    open, what to settle for and when to walk away, what Baby Mart can give, and what would weaken the case. Sales
+    figures are FY2026 to date (45 weeks to 7 May 2026, the battlecard's base); annual values are scaled to a year
+    of terms by the tool. Amounts are AUD; write them as "AUD 11,840" or "AUD 1.1M".
+  orchestration: >
+    1. EVIDENCE. Call NegotiationEvidence for the brand the question names.
+    2. POSITION. State the brand's sales, margin against its category, growth against the category, share and
+       rank, promotional discount, switching, and the supplier's DIFOT since 6 April with whose misses they are
+       (attribution). If the misses are Baby Mart's, say so plainly: they are not the supplier's failure.
+    3. BUILD. Call BuildNegotiationBrief once with the brand, the stance the user asked for (COLLABORATIVE,
+       BALANCED or FIRM; default BALANCED) and the user's request as REQUEST. Never call it twice.
+    4. BRIEF. Present each ask and give with its opening, target and walk-away exactly as the tool returned them,
+       the totals from the tool, the non-money levers and the guardrails. Recommend an order to play the asks:
+       lead with the best-supported ask, trade gives for asks, and keep the levers for the close.
+    5. VISUALISE. Call data_to_chart once: each ask's opening, target and walk-away. If it fails, carry on without
+       a chart: do not retry it and do not mention it in the answer.
+    You recommend; you never approve. A category manager approves the brief on the Negotiation brief page. Never
+    write SQL. Never invent a number, and never add, subtract or combine figures: the tool computes every total.
+  response: |
+    Start the answer with exactly one fenced code block tagged brief that contains a single JSON object and nothing
+    else:
+    ```brief
+    {"goal": "<what the user asked for, one sentence>",
+     "brief_id": "<brief_id from BuildNegotiationBrief>",
+     "brand": "<brand>", "supplier": "<supplier>", "category": "<category>", "stance": "<stance>",
+     "position": "<one sentence: the brand's position and the supplier's DIFOT, and whose misses they are>",
+     "key_evidence": [{"label": "<metric and comparison>", "value": "<number with unit>"}],
+     "asks": [{"ask_id": "A1", "kind": "<kind>", "direction": "ASK|GIVE", "label": "<label>", "basis": "<basis>",
+               "opening_aud": <number>, "target_aud": <number>, "walkaway_aud": <number>,
+               "guardrails": [{"level": "BLOCK|CAUTION|INFO", "message": "<message>"}]}],
+     "levers": [{"kind": "<kind>", "label": "<label>", "basis": "<basis>"}],
+     "totals": {"opening_aud": <number>, "target_aud": <number>, "walkaway_aud": <number>, "gives_aud": <number>},
+     "guardrails": [{"level": "BLOCK|CAUTION|INFO", "message": "<message>"}],
+     "play": ["<step 1 of how to run the meeting>", "<step 2>", "<step 3>"]}
+    ```
+    Copy every ask, lever, guardrail and total from BuildNegotiationBrief exactly; 3-5 key_evidence items (each
+    value at most 12 characters, e.g. "37.6%", "-1.1 pts", "AUD 28,480"). After the block, write short markdown
+    sections: Where we stand, The asks (a table of ask, opening, target, walk-away), How to play it, Watch outs.
+    Keep it concise. End by saying the brief is a draft for a category manager to approve on the Negotiation brief
+    page.
+  sample_questions:
+    - question: "Build a negotiation brief for our Huggies meeting with Kimberly-Clark."
+    - question: "We meet Rascal + Friends next week. Build a firm brief."
+    - question: "Prepare a balanced brief for the Bugaboo terms review."
+
+tools:
+  - tool_spec:
+      type: generic
+      name: NegotiationEvidence
+      description: >
+        Negotiation evidence for a brand: FY2026 to date sales, margin and the category's margin, growth against
+        the category, share and rank, promotional discount and what promotions return, brand switching (who
+        customers move to), price against competitors, the supplier's DIFOT since 6 April with the misses split into the
+        supplier's and Baby Mart's own ordering, stores short, and planner demand overrides on the brand. Call it
+        first.
+      input_schema:
+        type: object
+        properties:
+          BRAND:
+            type: string
+            description: "Brand name, e.g. Huggies, Rascal + Friends, Bugaboo"
+        required: [BRAND]
+  - tool_spec:
+      type: generic
+      name: BuildNegotiationBrief
+      description: >
+        Sizes the brief and writes it as a DRAFT: a margin ask (close the gap to the category), a promo co-funding
+        ask, a DIFOT credit on the supplier's own misses, a give (waive the DIFOT misses that were Baby Mart's), each
+        with opening, target and walk-away AUD values; non-money levers (joint growth plan, allocation commitment,
+        credible alternative brand); guardrails; and totals (asks less gives). Returns the brief_id. Call it once
+        per question.
+      input_schema:
+        type: object
+        properties:
+          BRAND:
+            type: string
+            description: "Brand name"
+          STANCE:
+            type: string
+            description: "COLLABORATIVE, BALANCED or FIRM (default BALANCED)"
+          REQUEST:
+            type: string
+            description: "The user's request, verbatim"
+        required: [BRAND, STANCE, REQUEST]
+  - tool_spec:
+      type: data_to_chart
+      name: data_to_chart
+      description: Generates visualizations from data returned by other tools
+
+tool_resources:
+  NegotiationEvidence:
+    type: procedure
+    identifier: BABY_MART_DEMO.AI.NEGOTIATION_EVIDENCE
+    execution_environment:
+      type: warehouse
+      warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 120
+  BuildNegotiationBrief:
+    type: procedure
+    identifier: BABY_MART_DEMO.AI.BUILD_NEGOTIATION_BRIEF
+    execution_environment:
+      type: warehouse
+      warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 120
+$$;
+
+SHOW AGENTS LIKE 'NEGOTIATION_BRIEF_AGENT' IN SCHEMA BABY_MART_DEMO.AI;

@@ -39,6 +39,12 @@ const TOOL_META: Record<string, Meta> = {
   CheckReportedDemand: { icon: ShieldCheck, label: "Tool · Reported demand vs POS" },
   StockoutEvidence: { icon: Database, label: "Tool · Stockout evidence pack" },
   BuildRecoveryPlan: { icon: PenLine, label: "Solver · Cost the recovery options (draft plan)" },
+  DifotEvidence: { icon: Database, label: "Tool · Supplier DIFOT evidence pack" },
+  TestDifotHypothesis: { icon: FlaskConical, label: "Tool · Test a cause of the DIFOT miss" },
+  NegotiationEvidence: { icon: Database, label: "Tool · Negotiation evidence pack" },
+  BuildNegotiationBrief: { icon: PenLine, label: "Solver · Size the asks (draft brief)" },
+  SandboxEvidence: { icon: Database, label: "Tool · Store plan position" },
+  BuildSandbox: { icon: PenLine, label: "Solver · Cost the sandbox options (draft proposal)" },
   system_execute_sql: { icon: Database, label: "Running the query" },
   data_to_chart: { icon: BarChart3, label: "Building a chart" },
 };
@@ -74,6 +80,12 @@ export function describeInput(name: string, input: unknown): string {
   if (name === "BrandEvidence" || name === "CheckReportedDemand") return [o.BRAND, o.CLASS].filter(Boolean).join(" · ");
   if (name === "TestBrandHypothesis") return `${[o.BRAND, o.CLASS].filter(Boolean).join(" ")} · split by ${String(o.DIMENSION)}`;
   if (name === "StockoutEvidence") return [o.BRAND, o.CLASS, o.STATE].filter(Boolean).join(" · ");
+  if (name === "DifotEvidence") return [o.SUPPLIER, o.BRAND, o.CLASS].filter((v) => v && v !== "ALL").join(" · ") || "every supplier";
+  if (name === "TestDifotHypothesis") return [[o.SUPPLIER, o.BRAND, o.CLASS].filter((v) => v && v !== "ALL").join(" "), o.DIMENSION ? `test ${String(o.DIMENSION).replace(/_/g, " ")}` : null].filter(Boolean).join(" · ");
+  if (name === "NegotiationEvidence") return String(o.BRAND ?? "");
+  if (name === "BuildNegotiationBrief") return [o.BRAND, o.STANCE ? `${String(o.STANCE).toLowerCase()} stance` : null].filter(Boolean).join(" · ");
+  if (name === "SandboxEvidence") return String(o.SCOPE ?? "");
+  if (name === "BuildSandbox") return [o.SCOPE, o.LEVER ? String(o.LEVER).toLowerCase().replace(/_/g, " ") + (typeof o.VALUE === "number" && o.VALUE ? ` ${o.VALUE}` : "") : null].filter(Boolean).join(" · ");
   if (name === "BuildRecoveryPlan") return [o.BRAND, o.CLASS, o.STATE, typeof o.TARGET_WEEKS === "number" ? `${o.TARGET_WEEKS} weeks cover` : null].filter(Boolean).join(" · ");
   if (name === "CheckCampaignGuardrails") return [o.CATEGORY, o.BRAND || "no brand", o.START_DATE && `${o.START_DATE} → ${o.END_DATE}`].filter(Boolean).join(" · ");
   if (name === "EstimateLift") return [o.CATEGORY || "all categories", o.CHANNELS, o.RECENCY_BAND].filter(Boolean).join(" · ");

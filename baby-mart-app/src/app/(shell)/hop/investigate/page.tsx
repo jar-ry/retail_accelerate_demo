@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader, Card } from "../_components/ui";
-import { AgentPanel } from "../../campaigns/_components/agent/AgentPanel";
+import { AgentPanel } from "@/components/agent/AgentPanel";
 import { PERIOD_DUAL } from "@/lib/hop/config";
 
 // ─── Planning Investigator ────────────────────────────────────────────────────

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PackageCheck, RotateCcw, Loader2 } from "lucide-react";
-import { AgentPanel } from "../../campaigns/_components/agent/AgentPanel";
-import { Pill } from "../../campaigns/_components/ui";
+import { AgentPanel } from "@/components/agent/AgentPanel";
+import { Pill } from "@/components/ui/kit";
 import { RecoveryCard, type RecoveryBlock } from "../_components/RecoveryCard";
 
 // ─── Stockout recovery ────────────────────────────────────────────────────────

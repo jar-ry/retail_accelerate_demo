@@ -4,8 +4,8 @@ import path from "path";
 import { splitBlock, verifyAnswer, toolPayload, type ToolResult } from "./agent-answer";
 import { testHypothesis, sizeAudience, createDraft, type Row } from "./tools";
 import * as SQL from "./sql";
-import { applyEvent, type Turn } from "@/app/(shell)/campaigns/_components/agent/useAgentRun";
-import { describeInput } from "@/app/(shell)/campaigns/_components/agent/ProgressTrail";
+import { applyEvent, type Turn } from "@/components/agent/useAgentRun";
+import { describeInput } from "@/components/agent/ProgressTrail";
 
 // Recorded runs of the two agents on canonical (trimmed to tool events and the
 // final text): the investigator on camp-001, the builder on the capsule brief.
@@ -284,6 +284,220 @@ describe("stockout recovery builder answers", () => {
   it("describes the builder's steps in words", () => {
     expect(describeInput("StockoutEvidence", { BRAND: "Rascal + Friends", CLASS: "Crawler Nappies", STATE: "NSW" })).toBe("Rascal + Friends · Crawler Nappies · NSW");
     expect(describeInput("BuildRecoveryPlan", { BRAND: "Rascal + Friends", CLASS: "Crawler Nappies", STATE: "NSW", TARGET_WEEKS: 6 })).toBe("Rascal + Friends · Crawler Nappies · NSW · 6 weeks cover");
+  });
+});
+
+// Recorded runs of the Supply Chain supplier DIFOT investigator on canonical
+// (agent/deploy_supply_agents.sql, tools sql/47): Kimberly-Clark x Huggies
+// Crawler Nappies (our override), Rascal & Co (the supplier's, shelves empty in
+// NSW) and every supplier ranked.
+describe("supplier DIFOT investigator answers", () => {
+  type Rca = { headline: string; hypotheses: { hypothesis: string; verdict: string; evidence: string }[];
+    actions: { owner: string; action: string; recovery_prompt?: string | null }[] };
+  const rca = (name: string) => splitBlock<Rca>(fixture(name).text, "rca").block!;
+  const verdict = (b: Rca, re: RegExp) => b.hypotheses.find((h) => re.test(h.hypothesis))?.verdict;
+  const tools = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use").map((e) => String(e.data.name));
+  const tested = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use" && e.data.name === "TestDifotHypothesis")
+    .map((e) => String((e.data.input as { DIMENSION?: string }).DIMENSION));
+
+  it("verifies every figure it wrote against its tools", () => {
+    for (const name of ["supply_difot_kc", "supply_difot_rascal", "supply_difot_all"]) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "rca");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("rca", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("always tests the component, the timing and whose problem it is", () => {
+    for (const name of ["supply_difot_kc", "supply_difot_rascal"]) {
+      expect(tools(name)[0]).toBe("DifotEvidence");
+      for (const d of ["component", "timing", "attribution"]) expect(tested(name)).toContain(d);
+      expect(new Set(tested(name)).size).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("puts Kimberly-Clark's Huggies Crawler misses on our override, not the supplier", () => {
+    const b = rca("supply_difot_kc");
+    expect(b.headline).toMatch(/Baby Mart|our|override/i);
+    expect(verdict(b, /override/i)).toBe("CONFIRMED");
+    expect(verdict(b, /lead time/i)).toBe("RULED_OUT");
+    expect(b.actions.some((a) => a.owner === "Demand Planning")).toBe(true);
+    // The scorecard should not count our inflated orders against the supplier.
+    expect(b.actions.some((a) => /scorecard|penalis/i.test(a.action))).toBe(true);
+    expect(b.actions.every((a) => !a.recovery_prompt)).toBe(true);
+  });
+
+  it("puts Rascal & Co's drop on the supplier in NSW and hands off to Stockout Recovery", () => {
+    const b = rca("supply_difot_rascal");
+    expect(b.headline).toMatch(/supplier/i);
+    expect(b.headline).toMatch(/NSW/);
+    expect(verdict(b, /override/i)).toBe("RULED_OUT");
+    expect(verdict(b, /NSW/)).toBe("CONFIRMED");
+    expect(b.actions.some((a) => a.owner === "Supply" && /Rascal/.test(a.recovery_prompt ?? ""))).toBe(true);
+  });
+
+  it("ranks every supplier and singles out Kimberly-Clark as the one that is ours", () => {
+    const f = fixture("supply_difot_all");
+    expect((f.events.find((e) => e.event === "response.tool_use")!.data.input as { SUPPLIER: string }).SUPPLIER).toBe("ALL");
+    const b = rca("supply_difot_all");
+    expect(b.headline).toMatch(/Kimberly-Clark/);
+    expect(b.headline).toMatch(/Baby Mart|our/i);
+  });
+
+  it("describes the investigator's steps in words", () => {
+    expect(describeInput("DifotEvidence", { SUPPLIER: "Kimberly-Clark ANZ", BRAND: "Huggies", CLASS: "Crawler Nappies" })).toBe("Kimberly-Clark ANZ · Huggies · Crawler Nappies");
+    expect(describeInput("DifotEvidence", { SUPPLIER: "ALL", BRAND: "", CLASS: "" })).toBe("every supplier");
+    expect(describeInput("TestDifotHypothesis", { SUPPLIER: "Rascal & Co", BRAND: "", CLASS: "", DIMENSION: "supplier_wide" })).toBe("Rascal & Co · test supplier wide");
+  });
+});
+
+// Recorded runs of the Category Manager negotiation brief builder on canonical
+// (agent/deploy_brand_agents.sql, tools sql/48): Huggies (the DIFOT misses are
+// ours, so they are offered back), Rascal + Friends firm (the supplier's misses
+// are claimed) and Bugaboo (the category's largest brand).
+describe("negotiation brief builder answers", () => {
+  type Ask = { ask_id: string; kind: string; direction: string; opening_aud?: number; target_aud?: number; walkaway_aud?: number; guardrails?: { level: string; message: string }[] };
+  type Brief = { brief_id: string; stance: string; asks: Ask[]; levers: { kind: string }[]; guardrails: { level: string; message: string }[];
+    totals: { opening_aud: number; target_aud: number; walkaway_aud: number; gives_aud: number } };
+  const brief = (name: string) => splitBlock<Brief>(fixture(name).text, "brief").block!;
+  const tools = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use").map((e) => String(e.data.name));
+  const NAMES = ["brief_huggies", "brief_rascal", "brief_bugaboo"];
+
+  it("verifies every AUD figure it wrote against its tools", () => {
+    for (const name of NAMES) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "brief");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("brief", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("builds once, writes a draft and never approves", () => {
+    for (const name of NAMES) {
+      expect(tools(name).filter((x) => x === "BuildNegotiationBrief")).toHaveLength(1);
+      expect(brief(name).brief_id).toMatch(/^NEG-\d{14}$/);
+      expect(fixture(name).text).toMatch(/draft/i);
+    }
+  });
+
+  it("copies the tool's totals: asks less gives, opening above target above walk-away", () => {
+    for (const name of NAMES) {
+      const b = brief(name);
+      const net = (k: "opening_aud" | "target_aud" | "walkaway_aud") =>
+        b.asks.reduce((x, a) => x + (a.direction === "GIVE" ? -1 : 1) * (a[k] ?? 0), 0);
+      for (const k of ["opening_aud", "target_aud", "walkaway_aud"] as const) expect(Math.abs(net(k) - b.totals[k])).toBeLessThanOrEqual(2);
+      for (const a of b.asks.filter((x) => x.direction === "ASK")) {
+        expect(a.opening_aud!).toBeGreaterThanOrEqual(a.target_aud!);
+        expect(a.target_aud!).toBeGreaterThanOrEqual(a.walkaway_aud!);
+      }
+    }
+  });
+
+  it("offers Kimberly-Clark's DIFOT misses back as a give and warns off the Crawler spike", () => {
+    const b = brief("brief_huggies");
+    expect(b.asks.some((a) => a.kind === "DIFOT")).toBe(false);
+    expect(b.asks.find((a) => a.kind === "DIFOT_WAIVER")?.direction).toBe("GIVE");
+    expect(b.asks.some((a) => a.kind === "MARGIN")).toBe(true);
+    expect(b.guardrails.some((g) => /override/i.test(g.message))).toBe(true);
+  });
+
+  it("claims Rascal & Co's own DIFOT misses on a firm brief, holds margin and asks for allocation", () => {
+    const b = brief("brief_rascal");
+    expect(b.stance).toBe("FIRM");
+    expect(b.asks.find((a) => a.kind === "DIFOT")?.direction).toBe("ASK");
+    expect(b.asks.some((a) => a.kind === "MARGIN")).toBe(false);
+    expect(b.levers.map((l) => l.kind)).toEqual(expect.arrayContaining(["MARGIN_HOLD", "ALLOCATION"]));
+  });
+
+  it("flags the category's dependency on Bugaboo", () => {
+    const b = brief("brief_bugaboo");
+    expect(b.guardrails.some((g) => /depends on it/.test(g.message))).toBe(true);
+    expect(b.levers.map((l) => l.kind)).toContain("GROWTH_PLAN");
+  });
+
+  it("describes the builder's steps in words", () => {
+    expect(describeInput("NegotiationEvidence", { BRAND: "Huggies" })).toBe("Huggies");
+    expect(describeInput("BuildNegotiationBrief", { BRAND: "Rascal + Friends", STANCE: "FIRM", REQUEST: "x" })).toBe("Rascal + Friends · firm stance");
+  });
+});
+
+// Recorded runs of the Head of Planning sandbox builder on canonical
+// (agent/deploy_hop_agents.sql, tools sql/49): QLD Metro Standard to its peer
+// rate, the company to +5% LFL, and a margin point at Gold Coast (a store with a
+// recorded clearance reason). Plus the Planning Investigator handing a what-if
+// to the builder.
+describe("store plan sandbox builder answers", () => {
+  type Opt = { option_id: string; stores_touched: number; sales_delta_aud: number; margin_delta_aud: number; company_lfl_pct: number; guardrails: { level: string; message: string }[] };
+  type Sbx = { proposal_id: string; scope: string; lever: string; options: Opt[]; recommended: string };
+  const sbx = (name: string) => splitBlock<Sbx>(fixture(name).text, "sandbox").block!;
+  const tools = (name: string) => fixture(name).events.filter((e) => e.event === "response.tool_use").map((e) => String(e.data.name));
+  const input = (name: string, tool: string) => fixture(name).events.find((e) => e.event === "response.tool_use" && e.data.name === tool)!.data.input as Record<string, unknown>;
+  const rec = (b: Sbx) => b.options.find((o) => o.option_id === b.recommended)!;
+  const NAMES = ["hop_sandbox_qld", "hop_sandbox_lfl5", "hop_sandbox_goldcoast"];
+
+  it("verifies every figure it wrote against its tools", () => {
+    for (const name of NAMES) {
+      const f = fixture(name);
+      const s = splitBlock(f.text, "sandbox");
+      expect(s.block).not.toBeNull();
+      const v = verifyAnswer("sandbox", s.block, s.after, results(f), f.question);
+      expect(v.unmatched).toEqual([]);
+      expect(v.verified).toBe(true);
+    }
+  });
+
+  it("builds once, writes a draft proposal and never opens a sandbox", () => {
+    for (const name of NAMES) {
+      expect(tools(name).filter((x) => x === "BuildSandbox")).toHaveLength(1);
+      expect(tools(name).indexOf("SandboxEvidence")).toBeLessThan(tools(name).indexOf("BuildSandbox"));
+      expect(sbx(name).proposal_id).toMatch(/^SBX-\d{14}$/);
+      expect(sbx(name).options).toHaveLength(3);
+    }
+  });
+
+  it("closes QLD Metro Standard's gap to its peer rate with no caution", () => {
+    expect(input("hop_sandbox_qld", "BuildSandbox").LEVER).toBe("PEER_RATE");
+    const b = sbx("hop_sandbox_qld");
+    expect(b.scope).toMatch(/QLD Metro Standard/);
+    expect(rec(b).sales_delta_aud).toBeGreaterThan(0);
+    expect(rec(b).guardrails.every((g) => g.level === "INFO")).toBe(true);
+  });
+
+  it("warns that +5% LFL needs an amendment to the approved plan and overrides recorded reasons", () => {
+    expect(input("hop_sandbox_lfl5", "BuildSandbox")).toMatchObject({ LEVER: "LFL_TARGET", VALUE: 5 });
+    const b = sbx("hop_sandbox_lfl5");
+    const a = b.options.find((o) => o.option_id === "A")!;
+    expect(a.company_lfl_pct).toBe(5);
+    expect(a.guardrails.some((g) => g.level === "CAUTION" && /Approve & lock/.test(g.message))).toBe(true);
+    expect(a.guardrails.some((g) => /STORE_REFURB/.test(g.message))).toBe(true);
+    expect(b.recommended).toBe("C");
+  });
+
+  it("flags Gold Coast's clearance reason on every margin option and takes the smallest change", () => {
+    const b = sbx("hop_sandbox_goldcoast");
+    expect(b.lever).toBe("MARGIN_SHIFT");
+    for (const o of b.options) {
+      expect(o.sales_delta_aud).toBe(0);
+      expect(o.guardrails.some((g) => /CLEARANCE_PUSH/.test(g.message))).toBe(true);
+    }
+    const sizes = b.options.map((o) => Math.abs(o.margin_delta_aud));
+    expect(Math.abs(rec(b).margin_delta_aud)).toBe(Math.min(...sizes));
+  });
+
+  it("is where the Planning Investigator sends a store plan what-if", () => {
+    const b = splitBlock<{ actions: { owner: string; sandbox_prompt?: string | null }[] }>(fixture("hop_qld_handoff").text, "rca").block!;
+    expect(b.actions.some((a) => a.owner === "Planning" && /peer rate/i.test(a.sandbox_prompt ?? ""))).toBe(true);
+  });
+
+  it("describes the builder's steps in words", () => {
+    expect(describeInput("SandboxEvidence", { SCOPE: "QLD Metro Standard" })).toBe("QLD Metro Standard");
+    expect(describeInput("BuildSandbox", { SCOPE: "ALL", LEVER: "LFL_TARGET", VALUE: 5, REQUEST: "x" })).toBe("ALL · lfl target 5");
+    expect(describeInput("BuildSandbox", { SCOPE: "QLD", LEVER: "PEER_RATE", VALUE: 0, REQUEST: "x" })).toBe("QLD · peer rate");
   });
 });
 

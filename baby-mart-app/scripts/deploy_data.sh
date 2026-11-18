@@ -120,6 +120,25 @@ SCRIPTS=(
   "$APP_DIR/sql/44_cmp_agent_views.sql"                  # semantic views + verbatim search for the agents
   "$APP_DIR/sql/45_cmp_agent_procs.sql"                  # the agents' procedure tools (generated)
   "$APP_DIR/agent/deploy_campaign_agents.sql"            # Campaign Builder + Campaign Investigator agents
+  # Persona agents: each agent file follows its tools. 25_ and 49_ read the Head
+  # of Planning block. 28_ corrects the supply story (Rascal & Co's NSW
+  # short-ships, the DIFOT drift), so it precedes 46_, which also reads the 40_
+  # campaign supply position, and 47_, which writes Kimberly-Clark's cuts on the
+  # 07_ override. 48_ reads 47_'s attribution, so it precedes the brand agents;
+  # 27_ widens the semantic view the brand investigator queries.
+  "$APP_DIR/sql/24_plan_agent_tools.sql"                 # Global Planning investigator + scenario builder tools
+  "$APP_DIR/agent/deploy_plan_agents.sql"                # PLAN_INVESTIGATOR_AGENT + PLAN_BUILDER_AGENT
+  "$APP_DIR/sql/25_hop_agent_tools.sql"                  # Planning Investigator tools
+  "$APP_DIR/sql/49_hop_sandbox_builder.sql"              # Sandbox builder tools + proposals
+  "$APP_DIR/agent/deploy_hop_agents.sql"                 # HOP_INVESTIGATOR_AGENT + HOP_SANDBOX_AGENT
+  "$APP_DIR/sql/28_supply_fixes.sql"                     # supply story corrections
+  "$APP_DIR/sql/46_supply_recovery.sql"                  # Stockout Recovery tools + plans
+  "$APP_DIR/sql/47_supplier_difot.sql"                   # DIFOT target, Kimberly-Clark cuts, DIFOT Investigator tools
+  "$APP_DIR/agent/deploy_supply_agents.sql"              # SUPPLY_RECOVERY_AGENT + SUPPLIER_DIFOT_AGENT
+  "$APP_DIR/sql/26_brand_agent_tools.sql"                # Brand Investigator tools
+  "$APP_DIR/sql/27_category_semantic_view.sql"           # category semantic view (class, store, region)
+  "$APP_DIR/sql/48_negotiation_brief.sql"                # Negotiation Brief tools + briefs
+  "$APP_DIR/agent/deploy_brand_agents.sql"               # BRAND_INVESTIGATOR_AGENT + NEGOTIATION_BRIEF_AGENT
 )
 
 echo "=============================================="

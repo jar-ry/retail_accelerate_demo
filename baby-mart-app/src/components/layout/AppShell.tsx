@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck,
+  LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck, Handshake, FlaskConical,
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
@@ -312,6 +312,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/battlecards" icon={Swords} label="Battlecards" color="blue" />
                   <NavItem href="/agent" icon={Bot} label="Category Agent" color="blue" />
                   <NavItem href="/investigate" icon={Lightbulb} label="Brand Investigator" color="blue" />
+                  <NavItem href="/negotiate" icon={Handshake} label="Negotiation Brief" color="blue" />
                   <SectionLabel>Vendor Economics</SectionLabel>
                   <NavItem href="/vendor/profitability" icon={DollarSign} label="Vendor Profitability" color="blue" />
                   <NavItem href="/vendor/scorecard" icon={Scale} label="Vendor Scorecard" color="blue" />
@@ -333,6 +334,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/replenishment/reorder" icon={ClipboardList} label="Purchase Orders" color="emerald" />
                   <NavItem href="/replenishment/alerts" icon={AlertTriangle} label="Alerts" color="emerald" />
                   <NavItem href="/replenishment/recovery" icon={Bot} label="Stockout Recovery" color="emerald" />
+                  <NavItem href="/replenishment/investigate" icon={Bot} label="DIFOT Investigator" color="emerald" />
                   <SectionLabel>Planning &amp; Demand</SectionLabel>
                   <NavItem href="/replenishment/planning/demand" icon={TrendingUp} label="Demand Forecast" color="emerald" />
                   <NavItem href="/replenishment/planning/difot" icon={Scale} label="DIFOT Breakdown" color="emerald" />
@@ -376,6 +378,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <NavItem href="/hop/wssi" icon={CalendarRange} label="WSSI" color="teal" />
                   <NavItem href="/hop/tpr" icon={Filter} label="Range review (TPR)" color="teal" />
                   <NavItem href="/hop/investigate" icon={Bot} label="Planning Investigator" color="teal" />
+                  <NavItem href="/hop/sandbox" icon={FlaskConical} label="Sandbox builder" color="teal" />
                   <SectionLabel>Govern</SectionLabel>
                   <NavItem href="/hop/approve" icon={Lock} label="Approve & lock" color="teal" />
                   <NavItem href="/hop/ownership" icon={ShieldCheck} label="Ownership" color="teal" />

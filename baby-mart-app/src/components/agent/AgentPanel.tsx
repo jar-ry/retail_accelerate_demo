@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCcw, Send } from "lucide-react";
 import type { BlockTag } from "@/lib/campaign/agent-answer";
-import { inputCls, Button } from "../ui";
+import { inputCls, Button } from "@/components/ui/kit";
 import { ProgressTrail } from "./ProgressTrail";
 import { AgentAnswer } from "./AgentCards";
 import { useAgentRun, type AgentId, type AgentStageId, type Turn } from "./useAgentRun";
