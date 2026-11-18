@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { Loader2, Clock, Truck, CheckCircle2, XCircle } from "lucide-react";
 
+/** A gap in days with its own sign: "+0.3d", "-0.1d" (never "+-0.1d"). */
+const signedDays = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}d`;
+
 interface LeadTimeRow {
   supplier: string;
   brands: string;
@@ -76,13 +79,13 @@ export default function LeadTimePage() {
             <div className="text-xs text-slate-500 font-medium uppercase">Avg Lead Gap</div>
           </div>
           <div className={`text-3xl font-bold mt-1 ${avgGap > 2 ? "text-red-600" : avgGap > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-            +{avgGap.toFixed(1)}d
+            {signedDays(avgGap)}
           </div>
           <div className="text-xs text-slate-400 mt-1">Actual vs standard</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
           <div className="text-xs text-slate-500 font-medium uppercase">Worst Gap</div>
-          <div className="text-3xl font-bold mt-1 text-red-600">+{worstGap.gap}d</div>
+          <div className="text-3xl font-bold mt-1 text-red-600">{signedDays(worstGap.gap)}</div>
           <div className="text-xs text-slate-400 mt-1 truncate">{worstGap.supplier}</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
@@ -130,7 +133,7 @@ export default function LeadTimePage() {
                   <td className="py-2 text-right font-mono font-medium text-slate-800">{row.avgActualLead}</td>
                   <td className="py-2 text-right">
                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${getGapColor(row.gap)}`}>
-                      +{row.gap}d
+                      {signedDays(row.gap)}
                     </span>
                   </td>
                   <td className="py-2 text-xs text-slate-500">{row.sourcingType}</td>

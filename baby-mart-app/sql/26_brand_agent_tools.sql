@@ -15,13 +15,14 @@
 --   CHECK_REPORTED_DEMAND(BRAND, CLASS)          do the reported demand views agree
 --                                                with what the tills sold?
 --
--- WHY THE THIRD TOOL EXISTS. ANALYTICS.V_STORE_DEMAND_WEEKLY (sql/07) multiplies
--- Huggies Crawler Nappies by x1.35-2.20 in FY2026 weeks 15-18, and the supply
--- pages' demand and overtrading views read it. The tills (FACT_TRANSACTION_LINES,
--- and DT_SELLTHROUGH_WEEKLY built from them) show no such spike. A brand
--- investigator that only read the view would explain a spike that never sold; one
--- that only read POS would never notice the view says otherwise. This tool
--- reconciles the two and names the multiplier from the view's own definition.
+-- WHY THE THIRD TOOL EXISTS. ANALYTICS.V_STORE_DEMAND_WEEKLY (sql/07) is the
+-- demand feed the supply pages read: POS plus any ACTIVE planner override in
+-- ANALYTICS.DEMAND_OVERRIDE. A demand planner ramped Huggies Crawler Nappies up
+-- x1.35-2.20 for FY2026 weeks 15-18 ahead of a supplier TV campaign; the tills
+-- (FACT_TRANSACTION_LINES, and DT_SELLTHROUGH_WEEKLY built from them) never
+-- moved. A brand investigator that only read the feed would explain a spike that
+-- never sold; one that only read POS would never notice the feed says otherwise.
+-- This tool reconciles the two and names the override: who, when, why, review date.
 --
 -- Read only. Every figure comes from POS (CURATED.FACT_TRANSACTION_LINES) unless
 -- a key says otherwise. Margin is total margin / total revenue, never an average
@@ -440,7 +441,7 @@ $$;
 CREATE OR REPLACE PROCEDURE BABY_MART_DEMO.AI.CHECK_REPORTED_DEMAND(BRAND VARCHAR, CLASS VARCHAR)
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
-COMMENT = 'Reconciles the reported demand views (V_STORE_DEMAND_WEEKLY / V_DEMAND_ROLLUP, read by the supply pages, and FORECAST_DEMAND_DAILY) against POS for a brand or brand x class, week by week and store by store, and reads any hardcoded multiplier from the view definition.'
+COMMENT = 'Reconciles the reported demand feed (V_STORE_DEMAND_WEEKLY / V_DEMAND_ROLLUP, read by the supply pages, and FORECAST_DEMAND_DAILY) against POS for a brand or brand x class, week by week and store by store, and names any planner override (DEMAND_OVERRIDE) behind a difference.'
 EXECUTE AS OWNER
 AS
 $$
@@ -507,14 +508,17 @@ const repMove = baseU && inflR !== null ? r1((inflR / baseU - 1) * 100) : null;
 const uniform = inflated.length > 0 && inflated.every((w) => w.store_multiplier_max - w.store_multiplier_min <= UNIFORM);
 const revAsUnits = weeks.filter((w) => w.reported_revenue_equals_units).length;
 
-// The view's own definition: any hardcoded multiplier for this brand and class.
-let multipliers = [], ddlError = null;
+// The planner overrides the feed applies for this brand and class (sql/07 DEMAND_OVERRIDE).
+let overrides = [], overrideError = null;
 try {
-  const ddl = String(rows(`SELECT GET_DDL('VIEW', '${A}.V_STORE_DEMAND_WEEKLY') AS D`)[0].d);
-  const re = /BRAND_NAME\s*=\s*'([^']+)'\s+AND\s+CLASS\s*=\s*'([^']+)'\s+AND\s+FISCAL_YEAR\s*=\s*(\d+)\s+AND\s+FISCAL_WEEK\s*=\s*(\d+)\s+THEN\s+SUM\(UNITS_SOLD\)\s*\*\s*([\d.]+)/gi;
-  let m;
-  while ((m = re.exec(ddl))) if (m[1] === brand && (!cls || m[2] === cls)) multipliers.push({ class: m[2], fiscal_year: Number(m[3]), fiscal_week: Number(m[4]), multiplier: Number(m[5]) });
-} catch (e) { ddlError = String(e.message || e).slice(0, 200); }
+  overrides = rows(`SELECT OVERRIDE_ID, CLASS, FISCAL_YEAR, FISCAL_WEEK, FACTOR, REASON, ENTERED_BY,
+      TO_CHAR(ENTERED_AT, 'YYYY-MM-DD') AS ENTERED_ON, TO_CHAR(REVIEW_BY, 'YYYY-MM-DD') AS REVIEW_BY, STATUS
+    FROM ${A}.DEMAND_OVERRIDE WHERE BRAND_NAME = ? AND (? = '' OR CLASS = ?) ORDER BY FISCAL_YEAR, FISCAL_WEEK`, [brand, cls, cls])
+    .map((o) => ({ override_id: o.override_id, class: o.class, fiscal_year: o.fiscal_year, fiscal_week: o.fiscal_week, factor: o.factor,
+      reason: o.reason, entered_by: o.entered_by, entered_on: o.entered_on, review_by: o.review_by, status: o.status }));
+} catch (e) { overrideError = String(e.message || e).slice(0, 200); }
+const active = overrides.filter((o) => o.status === "ACTIVE");
+const overdue = active.filter((o) => o.review_by && o.review_by < "2026-05-07");
 
 // The daily forecast table's "actuals" against POS, and any forecast uplift after POS ends.
 let forecast = null;
@@ -530,7 +534,7 @@ try {
       actual_vs_pos_pct: pos ? r1((f.act / pos - 1) * 100) : null,
       online_forecast_units_per_week_before: Math.round(f.onl_before), online_forecast_units_per_week_18_may_14_jun: Math.round(f.onl_after),
       online_forecast_uplift_pct: f.onl_before ? r1((f.onl_after / f.onl_before - 1) * 100) : null,
-      note: "This table's ACTUAL_UNITS are generated, not POS. Any uplift after 7 May 2026 is a forecast that no POS can confirm yet." };
+      note: "This table's ACTUAL_UNITS are the forecasting system's own demand history, not POS, and are not reconciled to the tills. Any uplift after 7 May 2026 is a forecast that no POS can confirm yet." };
   }
 } catch (e) { forecast = { error: String(e.message || e).slice(0, 200) }; }
 
@@ -538,9 +542,9 @@ let verdict, reading;
 if (!weeks.length) { verdict = "INCONCLUSIVE"; reading = `${label} has no weekly sell-through to reconcile.`; }
 else if (inflated.length && posMove !== null && Math.abs(posMove) < FLAT) {
   verdict = "REPORTING_ARTEFACT";
-  reading = `The reported spike is not in sales. V_STORE_DEMAND_WEEKLY shows ${label} ${repMove}% above its prior 8-week average in FY2026 weeks ${inflated.map((w) => w.fiscal_week).join(", ")}, but POS for those weeks is ${posMove}% (${Math.round(inflU)} vs ${Math.round(baseU)} units a week).` +
-    (uniform ? ` Every store carries the same multiplier each week, which demand does not do.` : "") +
-    (multipliers.length ? ` The view's definition hardcodes it: ${multipliers.map((m) => `week ${m.fiscal_week} x${m.multiplier}`).join(", ")}.` : "");
+  reading = `The reported spike is not in sales. The demand feed the supply pages read (V_STORE_DEMAND_WEEKLY) shows ${label} ${repMove}% above its prior 8-week average in FY2026 weeks ${inflated.map((w) => w.fiscal_week).join(", ")}, but POS for those weeks is ${posMove}% (${Math.round(inflU)} vs ${Math.round(baseU)} units a week).` +
+    (uniform ? ` Every store carries the same factor each week, which demand does not do.` : "") +
+    (active.length ? ` It is a manual override: ${active.length} weekly factors (${active.map((o) => `week ${o.fiscal_week} x${o.factor}`).join(", ")}) entered by ${active[0].entered_by} on ${active[0].entered_on} ("${active[0].reason}"), due for review on ${active[0].review_by}${overdue.length ? " and still active" : ""}.` : "");
 } else if (inflated.length) {
   verdict = "DIFFERS"; reading = `The reported view runs ${OVER}%+ above POS in weeks ${inflated.map((w) => w.fiscal_week).join(", ")}, and POS also moved ${posMove}%, so part of the reported move is real.`;
 } else { verdict = "MATCHES_POS"; reading = `The reported weekly units for ${label} match POS in ${clean.length} of ${weeks.length} weeks (within 1%).` +
@@ -552,9 +556,9 @@ return JSON.stringify({ ok: true, scope: label, brand, class: cls || null,
   pos_units_per_week_before: baseU === null ? null : Math.round(baseU), pos_units_per_week_in_inflated_weeks: inflU === null ? null : Math.round(inflU),
   reported_units_per_week_in_inflated_weeks: inflR === null ? null : Math.round(inflR),
   pos_move_pct: posMove, reported_move_pct: repMove, multiplier_uniform_across_stores: uniform,
-  multipliers_in_view_definition: multipliers, view_definition_error: ddlError,
+  overrides, active_overrides: active.length, overrides_past_review: overdue.length, override_error: overrideError,
   reported_revenue_is_units_weeks: revAsUnits,
-  revenue_note: revAsUnits ? `In ${revAsUnits} weeks the view's REVENUE column equals its UNITS: outside the multiplied rows it falls back to SUM(UNITS_SOLD), so reported revenue is units there.` : null,
+  revenue_note: revAsUnits ? `In ${revAsUnits} weeks the feed's REVENUE equals its UNITS, so use POS revenue.` : null,
   daily_forecast: forecast, verdict, reading,
-  rule: `REPORTING_ARTEFACT when the view runs ${OVER}%+ above POS in some weeks while POS in those weeks is within ${FLAT}% of its prior 8-week average; MATCHES_POS when every week is within 1%. A store multiplier spread of ${UNIFORM} or less in every inflated week means the same factor was applied to every store.` });
+  rule: `REPORTING_ARTEFACT when the view runs ${OVER}%+ above POS in some weeks while POS in those weeks is within ${FLAT}% of its prior 8-week average; MATCHES_POS when every week is within 1%. A store factor spread of ${UNIFORM} or less in every inflated week means the same factor was applied to every store; overrides lists the planner adjustments the feed applies.` });
 $$;

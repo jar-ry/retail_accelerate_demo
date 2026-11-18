@@ -18,7 +18,7 @@ import { AgentPanel } from "../_components/agent/AgentPanel";
 const SAMPLES = [
   "Build a campaign to move capsule families to convertible car seats, starting 18 May for four weeks with a $6,000 budget.",
   "Win back lapsed nappy buyers without discounting people who would come back anyway.",
-  "We have too much Uppababy stock coming. Who should we tell, and is it worth an offer?",
+  "We are carrying too much Bugaboo stock. Who should we tell, and is it worth an offer?",
 ];
 
 export default function BuilderPage() {

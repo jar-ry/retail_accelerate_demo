@@ -71,7 +71,8 @@ instructions:
     - ROOT CAUSE with a causal chain and a confidence (High, Medium or Low).
     - ACTIONS: 2-4, each with an owner (Planning, Buying, Store Ops, Finance). You recommend; you do not edit the
       plan. Edits happen on the Store plan or MFP page, through the ownership rules.
-    - VISUALISE: call data_to_chart once, on the split that explains the gap.
+    - VISUALISE: call data_to_chart once, on the split that explains the gap. If it fails, carry on without a
+      chart: do not retry it and do not mention it in the answer.
     Never write SQL. Never average a percentage across rows. Never invent a number: every figure must come from a
     tool result.
   response: |

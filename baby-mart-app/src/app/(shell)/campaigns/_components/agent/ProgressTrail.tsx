@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CheckCircle2, Database, FlaskConical, Loader2, MessagesSquare, PenLine, Search, ShieldCheck, Sigma, Users, XCircle } from "lucide-react";
+import { BarChart3, CheckCircle2, Database, FlaskConical, Loader2, MessagesSquare, MinusCircle, PenLine, Search, ShieldCheck, Sigma, Users, XCircle } from "lucide-react";
 import type { Step, Turn } from "./useAgentRun";
 
 // ─── Progress: the agent's steps as they happen ──────────────────────────────
@@ -97,9 +97,14 @@ export function describeInput(name: string, input: unknown): string {
   return "";
 }
 
+// A chart the agent could not build is not a failed analysis: data_to_chart only
+// charts SQL results, and the answer stands without it.
+const skipped = (s: Step) => s.status === "error" && s.name === "data_to_chart";
+
 function StepIcon({ s }: { s: Step }) {
   if (s.status === "running") return <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />;
   if (s.status === "success") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />;
+  if (skipped(s)) return <MinusCircle className="h-3.5 w-3.5 text-slate-400" />;
   return <XCircle className="h-3.5 w-3.5 text-red-500" />;
 }
 
@@ -124,7 +129,8 @@ export function ProgressTrail({ t, compact }: { t: Turn; compact?: boolean }) {
               <span className="absolute -left-[27px] top-0.5 grid h-4 w-4 place-items-center rounded-full bg-white"><StepIcon s={s} /></span>
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-800"><Icon className="h-3 w-3 text-slate-500" />{meta.label}</div>
               {what && <div className="mt-0.5 text-[11px] leading-snug text-slate-500">{what}</div>}
-              {s.status === "error" && <div className="mt-0.5 text-[10px] text-red-600">This step failed; the agent will work around it.</div>}
+              {skipped(s) && <div className="mt-0.5 text-[10px] text-slate-500">No chart for this result.</div>}
+              {s.status === "error" && !skipped(s) && <div className="mt-0.5 text-[10px] text-red-600">This step failed; the agent will work around it.</div>}
             </li>
           );
         })}

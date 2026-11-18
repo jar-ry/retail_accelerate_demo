@@ -7,42 +7,39 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 interface Brand {
   name: string;
-  revenue: string;
-  growth: string;
-  margin: string;
+  revenue: number;
+  growthPct: number | null;
+  marginPct: number | null;
 }
 
 interface Props {
   brands: Brand[];
+  /** The category's own growth and margin (total over total), drawn as the reference lines. */
+  categoryGrowthPct: number | null;
+  categoryMarginPct: number | null;
 }
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
+const fmtAud = (n: number) => (Math.abs(n) >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : `$${(n / 1e3).toFixed(1)}K`);
+const fmtPct = (v: number | null) => (v === null ? "n/a" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 
-export default function BrandBubbleChart({ brands }: Props) {
+export default function BrandBubbleChart({ brands: all, categoryGrowthPct, categoryMarginPct }: Props) {
   const router = useRouter();
+  const brands = all.filter((b) => b.growthPct !== null && b.marginPct !== null);
 
-  const parseGrowth = (s: string) => {
-    const n = parseFloat(s.replace(/[^0-9.]/g, ""));
-    return s.startsWith("-") ? -n : n;
-  };
-  const parseRevenue = (s: string) => {
-    const n = parseFloat(s.replace(/[^0-9.]/g, ""));
-    return s.includes("M") ? n * 1000 : n;
-  };
+  const xValues = brands.map((b) => b.growthPct as number);
+  const yValues = brands.map((b) => b.marginPct as number);
+  const sizes = brands.map((b) => Math.sqrt(Math.max(b.revenue, 0) / 1000) * 25);
 
-  const xValues = brands.map((b) => parseGrowth(b.growth));
-  const yValues = brands.map((b) => parseFloat(b.margin));
-  const sizes = brands.map((b) => Math.sqrt(parseRevenue(b.revenue)) * 25);
-
-  const avgX = xValues.reduce((a, b) => a + b, 0) / xValues.length;
-  const avgY = yValues.reduce((a, b) => a + b, 0) / yValues.length;
+  const avgX = categoryGrowthPct ?? 0;
+  const avgY = categoryMarginPct ?? 0;
 
   const xPad = 4;
   const yPad = 3;
-  const xMin = Math.min(...xValues) - xPad;
-  const xMax = Math.max(...xValues) + xPad;
-  const yMin = Math.min(...yValues) - yPad;
-  const yMax = Math.max(...yValues) + yPad;
+  const xMin = Math.min(...xValues, avgX) - xPad;
+  const xMax = Math.max(...xValues, avgX) + xPad;
+  const yMin = Math.min(...yValues, avgY) - yPad;
+  const yMax = Math.max(...yValues, avgY) + yPad;
 
   const trace = {
     type: "scatter" as const,
@@ -60,13 +57,13 @@ export default function BrandBubbleChart({ brands }: Props) {
       line: { width: 2, color: "white" },
     },
     hovertemplate: brands.map((b) =>
-      `<b>${b.name}</b><br>Revenue Growth: ${b.growth}<br>Margin: ${b.margin}<br>Revenue: ${b.revenue}<extra></extra>`
+      `<b>${b.name}</b><br>Revenue growth vs LY: ${fmtPct(b.growthPct)}<br>Margin: ${(b.marginPct as number).toFixed(1)}%<br>Revenue (28 days): ${fmtAud(b.revenue)}<extra></extra>`
     ),
     customdata: brands.map((b) => b.name),
   };
 
   const layout = {
-    xaxis: { title: { text: "Revenue Growth (%)", font: { size: 11 } }, zeroline: false, range: [xMin, xMax], gridcolor: "#f1f5f9" },
+    xaxis: { title: { text: "Revenue growth vs last year (%)", font: { size: 11 } }, zeroline: false, range: [xMin, xMax], gridcolor: "#f1f5f9" },
     yaxis: { title: { text: "Margin (%)", font: { size: 11 } }, zeroline: false, range: [yMin, yMax], gridcolor: "#f1f5f9" },
     showlegend: false,
     margin: { t: 20, r: 30, b: 50, l: 60 },
@@ -78,8 +75,8 @@ export default function BrandBubbleChart({ brands }: Props) {
       { type: "line" as const, x0: xMin, x1: xMax, y0: avgY, y1: avgY, line: { dash: "dot" as const, color: "#94a3b8", width: 1.5 } },
     ],
     annotations: [
-      { x: xMax - 0.3, y: avgY + 0.3, xanchor: "right" as const, yanchor: "bottom" as const, text: `Avg: ${avgY.toFixed(0)}%`, showarrow: false, font: { size: 10, color: "#94a3b8" } },
-      { x: avgX + 0.2, y: yMax - 0.3, xanchor: "left" as const, yanchor: "top" as const, text: `Avg: ${avgX.toFixed(1)}%`, showarrow: false, font: { size: 10, color: "#94a3b8" } },
+      { x: xMax - 0.3, y: avgY + 0.3, xanchor: "right" as const, yanchor: "bottom" as const, text: `Category: ${avgY.toFixed(1)}%`, showarrow: false, font: { size: 10, color: "#94a3b8" } },
+      { x: avgX + 0.2, y: yMax - 0.3, xanchor: "left" as const, yanchor: "top" as const, text: `Category: ${fmtPct(avgX)}`, showarrow: false, font: { size: 10, color: "#94a3b8" } },
     ],
   };
 

@@ -41,6 +41,7 @@ $$
 DECLARE
   v_cy            INTEGER;
   v_max_wk        INTEGER;
+  v_weeks         INTEGER;
   v_category      STRING;
   v_rev           FLOAT;
   v_marg          FLOAT;
@@ -80,6 +81,12 @@ BEGIN
   FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
   WHERE FISCAL_YEAR = :v_cy;
 
+  -- FISCAL_WEEK is a week of the year, so MAX(FISCAL_WEEK) is 52 as soon as the
+  -- year has a December; it is not "weeks elapsed". Count the weeks traded.
+  SELECT COUNT(DISTINCT FISCAL_WEEK) INTO :v_weeks
+  FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+  WHERE FISCAL_YEAR = :v_cy;
+
   -- Resolve the category: use the caller's if given, else the brand's biggest.
   IF (P_CATEGORY IS NULL OR P_CATEGORY = '') THEN
     SELECT CATEGORY INTO :v_category
@@ -105,11 +112,15 @@ BEGIN
   WHERE BRAND_NAME = :P_BRAND AND CATEGORY = :v_category
     AND FISCAL_YEAR = :v_cy AND FISCAL_WEEK <= :v_max_wk;
 
-  -- Same weeks last year, so growth is like-for-like.
+  -- The same weeks last year, so growth is like-for-like. Filtering last year on
+  -- FISCAL_WEEK <= MAX(week) compared 45 traded weeks with a full 52 and showed
+  -- every brand ~15% down.
   SELECT SUM(REVENUE) INTO :v_rev_py
   FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
   WHERE BRAND_NAME = :P_BRAND AND CATEGORY = :v_category
-    AND FISCAL_YEAR = :v_cy - 1 AND FISCAL_WEEK <= :v_max_wk;
+    AND FISCAL_YEAR = :v_cy - 1
+    AND FISCAL_WEEK IN (SELECT DISTINCT FISCAL_WEEK FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+                        WHERE FISCAL_YEAR = :v_cy);
 
   -- ---------- 3. Category benchmark ----------
   SELECT SUM(REVENUE), SUM(MARGIN), AVG(RATE_OF_SALE)
@@ -195,7 +206,7 @@ BEGIN
     'brand',                 :P_BRAND,
     'category',              :v_category,
     'fiscal_year',           :v_cy,
-    'weeks_elapsed',         :v_max_wk,
+    'weeks_traded',          :v_weeks,
     'revenue_aud',           ROUND(:v_rev, 0),
     'margin_aud',            ROUND(:v_marg, 0),
     'margin_pct',            ROUND(IFF(:v_rev > 0, :v_marg / :v_rev * 100, NULL), 1),

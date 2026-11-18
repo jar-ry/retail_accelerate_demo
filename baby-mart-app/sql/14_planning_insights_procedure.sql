@@ -275,6 +275,11 @@ BEGIN
     || 'only for presentation.' || CHAR(10)
     || '- Every risk and opportunity needs a "data" field quoting the specific '
     || 'metric it follows from. This is the explainability requirement.' || CHAR(10)
+    || '- Write every string, "data" included, for a planner: name each metric in '
+    || 'words ("GP rate gap to budget 0.0 pts", "forecast sales PHP 111.3M", "weeks '
+    || 'of cover incl. on order 17.1 vs 6.1 target"). Never write a JSON key such as '
+    || 'gp_gap_pp or sales_fc_php, and never write a strategy code: lfl_strategy G is '
+    || 'Grow and D is Planned decline.' || CHAR(10)
     || '- Do NOT reference store-level inventory, competitor pricing, promotional '
     || 'calendars or customer segments. Baby Mart holds no planning data for these here.'
     || CHAR(10) || CHAR(10);
@@ -284,10 +289,10 @@ BEGIN
   IF (:P_SCENARIO IS NOT NULL AND TRIM(:P_SCENARIO) <> '') THEN
     v_prompt := :v_prompt
       || 'SCENARIO TO MODEL: ' || :P_SCENARIO || CHAR(10)
-      || 'Quantify this scenario''s commercial impact by applying it to the '
-      || 'metrics above and showing the resulting sales, margin and buy position. '
-      || 'State the arithmetic you applied so a planner can check it. Put this in '
-      || 'scenario_commentary.' || CHAR(10) || CHAR(10);
+      || 'Do NOT cost this scenario: no figure you derive yourself may appear. In '
+      || 'scenario_commentary, say which of the metrics above it would move and in '
+      || 'which direction, quoting only figures that are in METRICS, and say that the '
+      || 'Scenario Builder (Scenario Planning page) costs it deterministically.' || CHAR(10) || CHAR(10);
   ELSE
     v_prompt := :v_prompt
       || 'No scenario was requested: set scenario_commentary to null.'

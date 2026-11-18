@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflake, querySnowflakeWithBinds } from "@/lib/snowflake";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -605,11 +605,22 @@ async function handleDemandDetail(brandName: string, skuClass: string) {
     AND FISCAL_YEAR = 2026 AND FISCAL_WEEK BETWEEN 11 AND 18
   `;
 
-  const [stateWeekly, topStores, growingStores, summary] = await Promise.all([
+  // Planner overrides the feed applies (sql/07 DEMAND_OVERRIDE): reported demand is
+  // POS times these factors, so the page says so where it shows the "surge".
+  const overrideSql = `
+    SELECT FISCAL_WEEK, FACTOR, REASON, ENTERED_BY, TO_CHAR(ENTERED_AT, 'YYYY-MM-DD') AS ENTERED_ON,
+           TO_CHAR(REVIEW_BY, 'YYYY-MM-DD') AS REVIEW_BY
+    FROM BABY_MART_DEMO.ANALYTICS.DEMAND_OVERRIDE
+    WHERE BRAND_NAME = ? AND CLASS = ? AND FISCAL_YEAR = 2026 AND STATUS = 'ACTIVE'
+    ORDER BY FISCAL_WEEK
+  `;
+
+  const [stateWeekly, topStores, growingStores, summary, overrideRows] = await Promise.all([
     querySnowflake(stateWeeklySql),
     querySnowflake(topStoresSql),
     querySnowflake(growingStoresSql),
     querySnowflake(summarySql),
+    querySnowflakeWithBinds(overrideSql, [brandName, skuClass]),
   ]);
 
   const s = summary[0] || {};
@@ -674,6 +685,14 @@ async function handleDemandDetail(brandName: string, skuClass: string) {
       priorUnits: safeInt(r.PRIOR_UNITS),
       latestUnits: safeInt(r.LATEST_UNITS),
       changePct: safeFloat(r.CHANGE_PCT),
+    })),
+    overrides: overrideRows.map((r) => ({
+      week: safeInt(r.FISCAL_WEEK),
+      factor: safeFloat(r.FACTOR),
+      reason: String(r.REASON ?? ""),
+      enteredBy: String(r.ENTERED_BY ?? ""),
+      enteredOn: String(r.ENTERED_ON ?? ""),
+      reviewBy: r.REVIEW_BY ? String(r.REVIEW_BY) : null,
     })),
   };
 }

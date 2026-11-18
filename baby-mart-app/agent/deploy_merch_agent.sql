@@ -83,7 +83,9 @@ instructions:
 
     Use build_range_rationalisation when asked to model deleting poor performing
     options, and goal_seek_gp when asked to find a stated amount of gross profit.
-    Both are deterministic: they compute their own numbers and you report them.
+    Both are deterministic: they compute their own numbers, save a DRAFT scenario
+    and return it reviewed, and you report those numbers. Say the scenario is a
+    draft the planner can compare and submit on the Scenario Planning page.
     Never estimate a scenario's impact yourself, and never state a price move or
     an option count that did not come out of one of these tools.
 
@@ -119,61 +121,51 @@ tools:
   - tool_spec:
       type: "generic"
       name: "build_range_rationalisation"
-      description: "Models deleting the least productive options in a class, ranked by gross profit per option per trading week. Returns a scenario id and its quantified impact. Does NOT change the approved forecast."
+      description: "Models deleting the least productive options in a class, ranked by gross profit per option per trading week, as a DRAFT scenario, and returns the scenario reviewed: options cut, sales, GP, GP rate and stock impact, cover before and after, and guardrails. Does NOT change the approved forecast."
       input_schema:
         type: object
         properties:
-          p_class:
+          CLASS_NAME:
             type: string
             description: "Class name, e.g. TRAVEL SYSTEM or SINGLE STROLLER."
-          p_bottom_pct:
+          BOTTOM_PCT:
             type: number
-            description: "Percentile to rationalise, e.g. 10 for the bottom 10 percent."
-          p_half:
+            description: "Percentile to rationalise, 1-50, e.g. 25 for the bottom 25 percent."
+          HALF:
             type: string
-            description: "H1 or H2. H2 is Jul-Dec 2026, H1 is Jan-Jun 2027."
-          p_created_by:
-            type: string
-            description: "Planner name to attribute the scenario to."
-          p_prompt:
+            description: "H1 or H2. H2 is Jul-Dec 2026 (in flight), H1 is Jan-Jun 2027 (the plan half)."
+          REQUEST:
             type: string
             description: "The planner's original request, stored verbatim on the scenario."
         required:
-          - p_class
-          - p_bottom_pct
-          - p_half
-          - p_created_by
-          - p_prompt
+          - CLASS_NAME
+          - BOTTOM_PCT
+          - HALF
+          - REQUEST
   - tool_spec:
       type: "generic"
       name: "goal_seek_gp"
-      description: "Finds a stated amount of additional gross profit and returns TWO costed alternatives: a targeted price and promo move, and a range increment. Solved algebraically, so it reports honestly when a target is not reachable through price at all. Does NOT change the approved forecast."
+      description: "Finds a stated amount of additional gross profit in one department or class and returns TWO costed DRAFT alternatives, reviewed: a targeted price and promo move, and a range increment. Solved algebraically, so it reports honestly when a target is not reachable through price. Does NOT change the approved forecast."
       input_schema:
         type: object
         properties:
-          p_department:
+          NODE:
             type: string
-            description: "Department to scope to. Pass null for the whole business."
-          p_class:
-            type: string
-            description: "Class to scope to. Pass null to cover the whole department."
-          p_target_gp:
+            description: "One department or class, e.g. PRAMS & STROLLERS or SINGLE STROLLER."
+          TARGET_GP_PHP:
             type: number
             description: "Gross profit to find, in PHP. Expand 500k to 500000."
-          p_half:
+          HALF:
             type: string
             description: "H1 or H2."
-          p_created_by:
-            type: string
-            description: "Planner name to attribute the scenario to."
-          p_prompt:
+          REQUEST:
             type: string
             description: "The planner's original request, stored verbatim."
         required:
-          - p_target_gp
-          - p_half
-          - p_created_by
-          - p_prompt
+          - NODE
+          - TARGET_GP_PHP
+          - HALF
+          - REQUEST
   - tool_spec:
       type: "cortex_search"
       name: "search_option_range"
@@ -192,16 +184,18 @@ tool_resources:
       warehouse: DEMO_ANALYTICS_WH
   build_range_rationalisation:
     type: procedure
-    identifier: BABY_MART_DEMO.ANALYTICS.BUILD_RANGE_RATIONALISATION
+    identifier: BABY_MART_DEMO.ANALYTICS.PLAN_RANGE_CUT
     execution_environment:
       type: warehouse
       warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 240
   goal_seek_gp:
     type: procedure
-    identifier: BABY_MART_DEMO.ANALYTICS.GOAL_SEEK_GP
+    identifier: BABY_MART_DEMO.ANALYTICS.PLAN_GOAL_SEEK
     execution_environment:
       type: warehouse
       warehouse: DEMO_ANALYTICS_WH
+      query_timeout: 240
   search_option_range:
     name: BABY_MART_DEMO.ANALYTICS.MERCH_OPTION_SEARCH
     id_column: OPTION_CODE

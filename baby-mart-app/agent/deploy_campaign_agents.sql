@@ -69,7 +69,10 @@ instructions:
     IDEAS MODE. When asked for several campaign ideas, do steps 1-5 more briefly for each idea (one
     SizeAudience and one CheckCampaignGuardrails call per idea), do not create drafts, and answer with the
     ideas block described in the response instructions.
-    Never write SQL yourself. Never invent a number: every figure must come from a tool result.
+    Never write SQL yourself. Never invent a number: every figure must come from a tool result. Never add up,
+    average or round tool figures into a new number: no totals across ideas or audiences ("4,757 people across
+    the three ideas") and no ranges or approximations ("about 125-300"). Quote each idea's own figure as the
+    tool returned it.
   response: |
     For a single campaign, start the answer with exactly one fenced code block tagged campaign containing one
     JSON object and nothing else:

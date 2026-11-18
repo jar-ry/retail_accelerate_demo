@@ -7,11 +7,12 @@
 -- each candidate cause: market, price vs volume, timing, state / region / format
 -- / store, class, SKU, customer segment, promotion, competitor price, supply.
 --
--- It also reconciles the reported demand views against POS. ANALYTICS.
--- V_STORE_DEMAND_WEEKLY multiplies Huggies Crawler Nappies by x1.35-2.20 in FY2026
--- weeks 15-18 and the supply pages read it; the tills show no such spike. When
--- the question is about a spike, the agent must say whether it is in sales at all
--- before explaining it.
+-- It also reconciles the reported demand feed against POS. The supply pages read
+-- ANALYTICS.V_STORE_DEMAND_WEEKLY: POS plus any active planner override
+-- (ANALYTICS.DEMAND_OVERRIDE). A demand planner ramped Huggies Crawler Nappies up
+-- x1.35-2.20 for FY2026 weeks 15-18 ahead of a supplier TV campaign; the tills
+-- show no such spike. When the question is about a spike, the agent must say
+-- whether it is in sales at all before explaining it.
 --
 -- Read only: it opens with a ```rca block and recommends; it writes nothing. The
 -- app checks every figure in the answer against the tool results. Tools:
@@ -44,9 +45,11 @@ instructions:
     1. EVIDENCE. Call BrandEvidence for the brand, and the class if the question names one (e.g. Huggies,
        Crawler Nappies). If the brand or class does not resolve, use the valid list it returns.
     2. IS IT REAL? If the question is about a spike or surge, or BrandEvidence's reported_demand.differs is true,
-       call CheckReportedDemand next. If its verdict is REPORTING_ARTEFACT, the spike is in a reporting view and not
-       in sales: say so first, quote the reported and POS moves and the multipliers it found, and investigate the
-       real POS move for what remains. Never explain a spike that POS does not show.
+       call CheckReportedDemand next. If its verdict is REPORTING_ARTEFACT, the spike is in the demand feed and not
+       in sales: say so first, quote the reported and POS moves and the planner override it names (who entered it,
+       when, why, its review date and whether it is still active), and investigate the real POS move for what
+       remains. Never explain a spike that POS does not show. Describe it in business terms, as a demand override in
+       the feed the supply team plans from; never describe view definitions, code or how the data was built.
     3. SYMPTOM. State the POS move against last year and the prior 28 days, and the market's move.
     4. HYPOTHESES. Consider at least five of: market (is the whole class or category moving?), price_volume,
        week (a step change or spike in time), state, region, format, store, class (for a brand), sku, segment,
@@ -60,10 +63,11 @@ instructions:
     Then:
     - RULE OUT what the tests rule out (UNIFORM, FRAGMENTED, STEADY, FLAT or NOT_SUPPORTED readings).
     - ROOT CAUSE with a causal chain and a confidence (High, Medium or Low).
-    - ACTIONS: 2-4, each with an owner (Category, Buying, Supply, Marketing, Data). You recommend; you do not
-      change anything.
+    - ACTIONS: 2-4, each with an owner (Category, Buying, Supply, Marketing, Demand Planning, Data). You recommend;
+      you do not change anything. An override past its review date belongs to Demand Planning to review or remove.
     - VISUALISE: call data_to_chart once, on the series that best shows the answer (for a spike that is not real,
-      the weekly reported vs POS units from CheckReportedDemand).
+      the weekly reported vs POS units from CheckReportedDemand). If it fails, carry on without a chart: do not
+      retry it and do not mention it in the answer.
     Never write SQL. Never average a percentage across rows. Never invent a number: every figure must come from a
     tool result.
   response: |
@@ -77,7 +81,7 @@ instructions:
      "hypotheses": [{"hypothesis": "<candidate cause>", "verdict": "CONFIRMED|RULED_OUT|INCONCLUSIVE", "evidence": "<one line with numbers>"}],
      "ruled_out": ["<hypothesis - one-line reason>"],
      "impact": "<AUD and %, and any risk ahead>",
-     "actions": [{"owner": "Category|Buying|Supply|Marketing|Data", "action": "<action>"}],
+     "actions": [{"owner": "Category|Buying|Supply|Marketing|Demand Planning|Data", "action": "<action>"}],
      "learning": "<one sentence: what to watch or do differently>"}
     ```
     Use 4-6 causal_chain steps (each under 15 words), 3-5 key_evidence items (each value at most 12 characters,

@@ -6,12 +6,46 @@
 -- captured in the numbered scripts. Snapshotted here so the demo is
 -- reproducible. Order matters: V_STORE_DEMAND_WEEKLY feeds V_DEMAND_ROLLUP.
 --
--- NOTE: V_STORE_DEMAND_WEEKLY's REVENUE expression falls back to
--- SUM(UNITS_SOLD) in its ELSE branch. That is faithful to the original demo
--- (all published figures derive from it) so it is preserved verbatim.
+-- V_STORE_DEMAND_WEEKLY is POS sell-through with any ACTIVE planner override
+-- from DEMAND_OVERRIDE applied on top; the supply pages read it as "reported
+-- demand". It used to hardcode the Huggies Crawler factors in a CASE and fall
+-- back to SUM(UNITS_SOLD) for REVENUE; the factors are now recorded overrides
+-- (same reported units) and REVENUE is revenue.
 -- ============================================================
 
 USE SCHEMA BABY_MART_DEMO.ANALYTICS;
+
+-- ----------------------------------------------------------
+-- DEMAND_OVERRIDE
+-- ----------------------------------------------------------
+-- The Huggies Crawler "surge": a demand planner ramped the class up for FY2026
+-- weeks 15-18 ahead of a supplier TV campaign, with a review date of 30 April.
+-- POS never moved and the override was never reviewed, so it is still ACTIVE.
+CREATE TABLE IF NOT EXISTS BABY_MART_DEMO.ANALYTICS.DEMAND_OVERRIDE (
+  OVERRIDE_ID  VARCHAR(20) PRIMARY KEY,
+  BRAND_NAME   VARCHAR(100),
+  CLASS        VARCHAR(100),
+  FISCAL_YEAR  NUMBER(4,0),
+  FISCAL_WEEK  NUMBER(2,0),
+  FACTOR       NUMBER(6,3),
+  REASON       VARCHAR(500),
+  ENTERED_BY   VARCHAR(100),
+  ENTERED_AT   TIMESTAMP_NTZ,
+  REVIEW_BY    DATE,
+  STATUS       VARCHAR(20)   -- ACTIVE | REMOVED
+) COMMENT = 'Manual demand overrides a planner layered on POS sell-through. V_STORE_DEMAND_WEEKLY applies every ACTIVE row.';
+
+MERGE INTO BABY_MART_DEMO.ANALYTICS.DEMAND_OVERRIDE t
+USING (SELECT * FROM VALUES
+  ('DOV-26-0415', 'Huggies', 'Crawler Nappies', 2026, 15, 1.35),
+  ('DOV-26-0416', 'Huggies', 'Crawler Nappies', 2026, 16, 1.50),
+  ('DOV-26-0417', 'Huggies', 'Crawler Nappies', 2026, 17, 1.72),
+  ('DOV-26-0418', 'Huggies', 'Crawler Nappies', 2026, 18, 2.20)
+  AS v(OVERRIDE_ID, BRAND_NAME, CLASS, FISCAL_YEAR, FISCAL_WEEK, FACTOR)) s
+ON t.OVERRIDE_ID = s.OVERRIDE_ID
+WHEN NOT MATCHED THEN INSERT VALUES (s.OVERRIDE_ID, s.BRAND_NAME, s.CLASS, s.FISCAL_YEAR, s.FISCAL_WEEK, s.FACTOR,
+  'Uplift ahead of the Kimberly-Clark Crawler Nappies TV campaign (supplier advised a mid-April launch); ramped weekly.',
+  'Sam Patel (Demand Planning)', '2026-04-02 09:14:00'::TIMESTAMP_NTZ, '2026-04-30'::DATE, 'ACTIVE');
 
 -- ----------------------------------------------------------
 -- V_STORE_DEMAND_WEEKLY
@@ -27,23 +61,16 @@ create or replace view V_STORE_DEMAND_WEEKLY(
 	REVENUE,
 	ROS
 ) as
-SELECT BRAND_NAME, CLASS AS SKU_CLASS, STATE, STORE_NAME, FISCAL_WEEK, FISCAL_YEAR,
-       CASE 
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 15 THEN SUM(UNITS_SOLD) * 1.35
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 16 THEN SUM(UNITS_SOLD) * 1.50
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 17 THEN SUM(UNITS_SOLD) * 1.72
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 18 THEN SUM(UNITS_SOLD) * 2.20
-         ELSE SUM(UNITS_SOLD)
-       END AS UNITS,
-       CASE
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 15 THEN SUM(REVENUE) * 1.35
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 16 THEN SUM(REVENUE) * 1.50
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 17 THEN SUM(REVENUE) * 1.72
-         WHEN BRAND_NAME = 'Huggies' AND CLASS = 'Crawler Nappies' AND FISCAL_YEAR = 2026 AND FISCAL_WEEK = 18 THEN SUM(REVENUE) * 2.20
-         ELSE SUM(UNITS_SOLD)
-       END AS REVENUE,
-       AVG(RATE_OF_SALE) AS ROS
-FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+SELECT s.BRAND_NAME, s.CLASS AS SKU_CLASS, s.STATE, s.STORE_NAME, s.FISCAL_WEEK, s.FISCAL_YEAR,
+       SUM(s.UNITS_SOLD) * COALESCE(MAX(o.FACTOR), 1) AS UNITS,
+       SUM(s.REVENUE) * COALESCE(MAX(o.FACTOR), 1) AS REVENUE,
+       AVG(s.RATE_OF_SALE) AS ROS
+FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY s
+-- Pre-aggregated so two overrides on one week compound instead of fanning out the join.
+LEFT JOIN (SELECT BRAND_NAME, CLASS, FISCAL_YEAR, FISCAL_WEEK, EXP(SUM(LN(FACTOR))) AS FACTOR
+           FROM BABY_MART_DEMO.ANALYTICS.DEMAND_OVERRIDE WHERE STATUS = 'ACTIVE' AND FACTOR > 0
+           GROUP BY 1, 2, 3, 4) o
+  ON o.BRAND_NAME = s.BRAND_NAME AND o.CLASS = s.CLASS AND o.FISCAL_YEAR = s.FISCAL_YEAR AND o.FISCAL_WEEK = s.FISCAL_WEEK
 GROUP BY 1,2,3,4,5,6;
 
 -- ----------------------------------------------------------

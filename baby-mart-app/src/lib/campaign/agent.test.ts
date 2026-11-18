@@ -185,15 +185,19 @@ describe("brand investigator answers", () => {
     }
   });
 
-  it("checks the Crawler spike against POS and calls it a reporting artefact, not demand", () => {
+  it("checks the Crawler spike against POS and traces it to the planner override, not demand", () => {
     expect(tools("brand_crawler")).toContain("CheckReportedDemand");
     const b = rca("brand_crawler");
-    expect(b.headline).toMatch(/artefact|artifact|not in sales|not real/i);
-    expect(verdict(b, /artefact|artifact|report/i)).toBe("CONFIRMED");
+    expect(b.headline).toMatch(/override/i);
+    expect(b.headline).toMatch(/feed|not in sales|not real|flat/i);
+    expect(verdict(b, /artefact|artifact|override/i)).toBe("CONFIRMED");
     expect(verdict(b, /step|week|spike/i)).toBe("RULED_OUT");
     // The DIFOT collapse is a risk to raise with the supplier, not the cause of a sales move.
     expect(verdict(b, /supply/i)).not.toBe("CONFIRMED");
-    expect(b.actions.some((a) => a.owner === "Data")).toBe(true);
+    // An override past its review date is Demand Planning's to remove.
+    expect(b.actions.some((a) => a.owner === "Demand Planning")).toBe(true);
+    // Business terms only: the answer never describes how the data was built.
+    expect(fixture("brand_crawler").text).not.toMatch(/hardcod|view definition|generated data/i);
   });
 
   it("finds Bugaboo's decline brand-specific and volume-led, and rules out supply", () => {

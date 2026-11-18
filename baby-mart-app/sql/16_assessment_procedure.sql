@@ -151,7 +151,7 @@ BEGIN
     SELECT ARRAY_AGG(OBJECT_CONSTRUCT(
              'department',      DEPARTMENT,
              'code',            DEPARTMENT_CODE,
-             'lfl_strategy',    LFL_STRATEGY,
+             'strategy',        DECODE(LFL_STRATEGY, 'G', 'Grow', 'D', 'Planned decline', LFL_STRATEGY),
              'sales_fc_php',    ROUND(SLS_FC_PHP, 0),
              'sales_bud_php',   ROUND(SLS_BUD_PHP, 0),
              'var_to_bud_php',  ROUND(VAR_TO_BUD_PHP, 0),
@@ -170,7 +170,7 @@ BEGIN
     SELECT ARRAY_AGG(OBJECT_CONSTRUCT(
              'class',          CLASS,
              'department',     DEPARTMENT,
-             'lfl_strategy',   LFL_STRATEGY,
+             'strategy',       DECODE(LFL_STRATEGY, 'G', 'Grow', 'D', 'Planned decline', LFL_STRATEGY),
              'sales_fc_php',   ROUND(SLS_FC_PHP, 0),
              'var_to_bud_pct', VAR_TO_BUD_PCT,
              'lfl_growth_pct', LFL_GROWTH_PCT,
@@ -454,8 +454,9 @@ BEGIN
     || 'belong to the F27 H1 merchandise plan. Category and vendor figures '
     || '(anything _aud) are Australian Dollars. Never convert between them and '
     || 'never total them together.' || CHAR(10)
-    || '- An lfl_strategy of "D" marks a DELIBERATE planned decline. Do not '
-    || 'report its negative growth as a risk; judge it against budget.' || CHAR(10)
+    || '- A strategy of "Planned decline" marks a DELIBERATE managed exit. Do not '
+    || 'report its negative growth as a risk; judge it against budget. Write the '
+    || 'strategy in words, never as a code.' || CHAR(10)
     || '- COVER: there are TWO cover measures and they are not interchangeable. '
     || 'cover_weeks_incl_on_order is the one buy_status is judged on, so it is '
     || 'the ONLY figure you may quote when explaining an OVERBUY or UNDERBUY '
