@@ -11,8 +11,11 @@ import { querySnowflake, toIsoDate, toIsoDateTime } from "@/lib/snowflake";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Snowflake string literals honour backslash escapes, so doubling quotes alone
+// lets a value ending in \' close the literal (and turns a JSON "\"" into a bare
+// quote inside PARSE_JSON). Escape the backslash first.
 function escapeSql(s: string): string {
-  return s.replace(/'/g, "''");
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "''");
 }
 
 function num(v: unknown): number {

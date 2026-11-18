@@ -64,6 +64,14 @@ export default function StorePlanPage() {
   const [flash, setFlash] = useState<{ tone: "ok" | "error" | "warn"; text: string } | null>(null);
   const [bulk, setBulk] = useState(false);
   const [picked, setPicked] = useState<Map<string, BulkCell>>(new Map());
+  // A sandbox that has since been removed (a stale link): show the live plan and say so.
+  const missingSandbox = scenarioId !== null && !!error && /does not exist/.test((error as Error).message);
+  useEffect(() => {
+    if (!missingSandbox) return;
+    setFlash({ tone: "warn", text: `Sandbox ${scenarioId} no longer exists, so this is the live plan.` });
+    setScenarioId(null);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [missingSandbox, scenarioId]);
 
   const own = useMemo(() => ownershipMap(data?.ownership), [data]);
   const index = useMemo(() => indexWeeks(data?.weeks ?? []), [data]);
@@ -113,7 +121,7 @@ export default function StorePlanPage() {
       .map((s) => String(s.STORE_CODE));
   }, [data, index, filter, search, moved]);
 
-  if (isLoading) return <Loading what="the store plan" />;
+  if (isLoading || missingSandbox) return <Loading what="the store plan" />;
   if (error) return <ErrorState message={(error as Error).message} />;
   if (!data) return <ErrorState message="No store plan returned." />;
 

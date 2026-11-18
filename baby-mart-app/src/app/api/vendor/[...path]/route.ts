@@ -393,7 +393,7 @@ async function handlePostInsights(request: NextRequest) {
   try {
     const prompt = await insightPrompt(body);
     if (!prompt) return NextResponse.json({ error: "Ask for kind 'scorecard' with a supplier, or 'benchmarking' with an optional category." }, { status: 400 });
-    const rows = await querySnowflakeWithBinds(`SELECT SNOWFLAKE.CORTEX.COMPLETE('claude-opus-4-7', ?) AS RESP`, [prompt]);
+    const rows = await querySnowflakeWithBinds(`SELECT SNOWFLAKE.CORTEX.COMPLETE('claude-sonnet-4-6', ?) AS RESP`, [prompt]);
     return NextResponse.json({
       text: rows[0] ? (rows[0] as Record<string, unknown>)["RESP"] : "",
     });

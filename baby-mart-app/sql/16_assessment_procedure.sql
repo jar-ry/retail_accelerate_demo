@@ -55,7 +55,7 @@ DECLARE
   v_version   INT;
   v_started   TIMESTAMP_LTZ;
   v_elapsed   INT;
-  v_model     STRING DEFAULT 'claude-opus-4-7';
+  v_model     STRING DEFAULT 'claude-sonnet-4-6';
 
   -- Planning blocks
   v_plan_rbu     VARIANT;

@@ -129,7 +129,7 @@ BEGIN
     || 'Keep every string on one line with no control characters.';
 
   v_raw := SNOWFLAKE.CORTEX.COMPLETE(
-    'claude-opus-4-7',
+    'claude-sonnet-4-6',
     [{'role': 'user', 'content': :v_prompt}],
     {'max_tokens': 1500, 'temperature': 0}
   ):choices[0]:messages::STRING;
@@ -805,7 +805,7 @@ BEGIN
     || 'headline is under 70 characters. Keep strings on one line.';
 
   v_raw := SNOWFLAKE.CORTEX.COMPLETE(
-    'claude-opus-4-7',
+    'claude-sonnet-4-6',
     [{'role': 'user', 'content': :v_prompt}],
     {'max_tokens': 1200, 'temperature': 0}
   ):choices[0]:messages::STRING;
@@ -893,7 +893,7 @@ BEGIN
     || CHAR(10) || 'rationale is 2 to 3 sentences on one line.';
 
   v_raw := SNOWFLAKE.CORTEX.COMPLETE(
-    'claude-opus-4-7',
+    'claude-sonnet-4-6',
     [{'role': 'user', 'content': :v_prompt}],
     {'max_tokens': 1200, 'temperature': 0}
   ):choices[0]:messages::STRING;

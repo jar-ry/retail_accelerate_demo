@@ -282,7 +282,7 @@ BEGIN
   -- a card this size mid-JSON. temperature 0 keeps demo runs reproducible.
   -- With options, COMPLETE returns an object rather than a string.
   v_raw := SNOWFLAKE.CORTEX.COMPLETE(
-    'claude-opus-4-7',
+    'claude-sonnet-4-6',
     [{'role': 'user', 'content': :v_prompt}],
     {'max_tokens': 16384, 'temperature': 0}
   ):choices[0]:messages::STRING;
