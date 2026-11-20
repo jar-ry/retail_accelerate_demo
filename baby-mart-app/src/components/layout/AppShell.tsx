@@ -10,8 +10,11 @@ import {
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
   ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
-  PenTool, BookOpen, Activity, Map as MapIcon, Radar,
+  PenTool, BookOpen, Activity, Map as MapIcon, Radar, Presentation,
 } from "lucide-react";
+import { DemoGuide } from "@/components/demo/DemoGuide";
+import { DemoSwitch } from "@/components/demo/DemoSwitch";
+import { useDemoMode } from "@/lib/demo/demo-mode";
 
 const categories = [
   { slug: "prams-strollers", label: "Prams & Strollers", icon: Baby },
@@ -246,6 +249,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
 
   const meta = PERSONAS[persona];
+  const demo = useDemoMode();
   const style = PERSONA_STYLES[meta.color];
 
   // The <title> lives in the root layout, which is server-rendered once and knows
@@ -434,13 +438,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </>
               )}
             </nav>
-            <div className="p-4 border-t border-slate-200">
+            <div className="p-4 border-t border-slate-200 space-y-2">
+              {/* Demo mode: the presenter guide docks beside the page and follows
+                  the talk track (/demo). Shown on every persona. */}
+              <div className="flex items-center gap-2">
+                <Presentation className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-[11px] text-slate-600">Demo mode</span>
+                <span className="ml-auto"><DemoSwitch on={demo.on} onChange={demo.setOn} /></span>
+              </div>
+              <Link href={`/demo?persona=${persona}`} className={`block text-[11px] ${demo.on ? "font-medium text-slate-700" : "text-slate-500"} hover:underline`}>
+                Demo talk tracks →
+              </Link>
               <div className="text-[10px] text-slate-500">Powered by Snowflake</div>
             </div>
           </aside>
-          <main className="flex-1 overflow-y-auto">
+          {/* min-w-0: a flex child will not shrink below its content otherwise,
+              so the demo guide's rail pushed wide pages under itself. */}
+          <main className="flex-1 min-w-0 overflow-y-auto">
             {children}
           </main>
+          <DemoGuide persona={persona} />
         </div>
     </QueryClientProvider>
   );
