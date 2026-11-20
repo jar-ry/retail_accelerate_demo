@@ -147,6 +147,8 @@ export const AGENTS = {
   // The Category Manager's brand investigator (agent/deploy_brand_agents.sql),
   // beside the category agent in the AI schema. Separate from it for the same
   // reason: an investigator's playbook would blur the text-to-SQL agent's job.
+  // One entry fronts both: /agent routes a brand's "why" here and the rest to
+  // the category agent (src/lib/ai/category-route.ts).
   brandInvestigator: {
     id: "brandInvestigator",
     label: "Brand Investigator",

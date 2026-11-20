@@ -1,93 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Bot, Send } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { streamAgentChat } from "@/components/agent/agentStream";
-
-interface TableBlock {
-  title: string;
-  columns: string[];
-  rows: unknown[][];
-}
-
-interface Message {
-  role: string;
-  content: string;
-  tables?: TableBlock[];
-}
-
-// ─── Result-table presentation ────────────────────────────────────────────────
-//
-// A tool result arrives as raw SQL: physical column names and unrounded numbers.
-// Printed verbatim that gave the planner "VARIANCE_TO_BUDGET_PCT" over
-// "219938238.00" while every other screen in the app says "Variance to budget"
-// over "PHP 219.9M" -- and the wide raw headers pushed the variance column, the
-// one the question was actually about, off the right edge.
-//
-// Column names carry their own type here, so the formatter is driven by the name
-// rather than by guessing from the value: a bare 40.6 could be a rate or an
-// amount, and only "GP_PCT" says which.
-
-/** SALES_BUDGET -> Sales budget.
- *  Also trims the words that make a SQL alias verbose without adding meaning, so
- *  a seven-column result fits the pane instead of pushing its last two columns
- *  off the right edge. */
-function humaniseColumn(c: string): string {
-  const s = c
-    .replace(/_/g, " ")
-    .toLowerCase()
-    .replace(/\bpct\b/g, "%")
-    .replace(/\bphp\b/g, "")
-    .replace(/\bamt\b/g, "amount")
-    .replace(/\bweeks\b/g, "wks")
-    .replace(/\btotal wks\b/g, "wks")
-    .replace(/\bvalue\b/g, "")
-    .replace(/\btotal cover\b/g, "cover")
-    .replace(/\bgp\b/g, "GP")
-    .replace(/\botb\b/g, "OTB")
-    .replace(/\blfl\b/g, "LFL")
-    .replace(/\basp\b/g, "ASP")
-    .replace(/\s+/g, " ")
-    .trim();
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-type ColKind = "money" | "pct" | "weeks" | "num" | "text";
-
-function columnKind(c: string): ColKind {
-  const u = c.toUpperCase();
-  if (/(_PCT|\bPCT\b|PERCENT|_PP\b)/.test(u)) return "pct";
-  if (/WEEK/.test(u)) return "weeks";
-  if (/(SALES|BUDGET|VARIANCE|GP|PHP|OTB|OPEN_TO_BUY|STOCK|ON_ORDER|COMMITTED|AMT|VALUE|COST|MARGIN)/.test(u)
-      && !/COUNT|UNITS|RANK/.test(u)) return "money";
-  if (/(COUNT|UNITS|RANK|OPTIONS|QTY)/.test(u)) return "num";
-  return "text";
-}
-
-/** PHP at the magnitude a planner reads: millions above a million, else thousands. */
-function fmtAgentMoney(n: number): string {
-  const a = Math.abs(n);
-  const sign = n < 0 ? "−" : "";
-  if (a >= 1_000_000) return `${sign}PHP ${(a / 1_000_000).toFixed(1)}M`;
-  if (a >= 1_000) return `${sign}PHP ${(a / 1_000).toFixed(0)}k`;
-  return `${sign}PHP ${a.toFixed(0)}`;
-}
-
-function fmtCell(cell: unknown, kind: ColKind): string {
-  if (cell === null || cell === undefined || cell === "") return "–";
-  const n = typeof cell === "number" ? cell : Number(String(cell).replace(/,/g, ""));
-  if (!isFinite(n) || String(cell).trim() === "") return String(cell);
-  switch (kind) {
-    case "money": return fmtAgentMoney(n);
-    case "pct":   return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
-    case "weeks": return `${n.toFixed(1)}w`;
-    case "num":   return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-    default:      return String(cell);
-  }
-}
-
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bot, Lightbulb, RotateCcw, Search, Send, Sparkles } from "lucide-react";
+import { LookupAnswer, Working, useLookupChat, type LookupTurn } from "@/components/agent/LookupChat";
+import { ProgressTrail } from "@/components/agent/ProgressTrail";
+import { AgentAnswer } from "@/components/agent/AgentCards";
+import { useAgentRun } from "@/components/agent/useAgentRun";
+import {
+  investigateQuestion, namedBrand, routeCategoryQuestion, type CategoryMode, type CategoryRoute,
+} from "@/lib/ai/category-route";
 
 /** The two agents this page can front. Selected by the ?persona= tag the sidebar
  *  puts on its link, so a merchandise planner and a category manager get the
@@ -95,283 +16,325 @@ function fmtCell(cell: unknown, kind: ColKind): string {
  *
  *  Read from window rather than useSearchParams: this page is statically
  *  prerendered and useSearchParams would force it into a Suspense boundary. */
-const AGENT_PROFILES = {
-  category: {
-    id: "category",
-    title: "Category Intelligence Agent",
-    subtitle: "Powered by Cortex Agent + Semantic View",
-    greeting:
-      "Hi! I'm your Category Intelligence Agent. I can help you analyse brand performance, customer segments, competitive pricing, and promotional effectiveness across all Baby Mart categories. What would you like to know?",
-    prompts: [
-      "Top 5 brands by revenue growth this year",
-      "Which brands are losing the most customers in Nappies & Wipes?",
-      "Compare Huggies promotion effectiveness by mechanic",
-    ],
-  },
-  merch: {
-    id: "merch",
-    title: "Merch Planning Agent",
-    subtitle: "Baby Mart merchandise plan, open-to-buy and scenarios",
-    greeting:
-      "Hi! I'm your Merch Planning Agent. I can explain what is driving a variance, show you the buy position by class, rank SKU productivity, and model range or price scenarios against the Baby Mart plan. What would you like to know?",
-    prompts: [
-      "What are the drivers of PRAMS & STROLLERS being behind budget?",
-      "Which classes are overbought, and by how much?",
-      "Model rationalising the bottom 25% of TRAVEL SYSTEM in H2",
-    ],
-  },
+const MERCH = {
+  id: "merch",
+  title: "Merch Planning Agent",
+  subtitle: "Baby Mart merchandise plan, open-to-buy and scenarios",
+  greeting:
+    "Hi! I'm your Merch Planning Agent. I can explain what is driving a variance, show you the buy position by class, rank SKU productivity, and model range or price scenarios against the Baby Mart plan. What would you like to know?",
+  prompts: [
+    "What are the drivers of PRAMS & STROLLERS being behind budget?",
+    "Which classes are overbought, and by how much?",
+    "Model rationalising the bottom 25% of TRAVEL SYSTEM in H2",
+  ],
 } as const;
 
-function activeProfile() {
-  if (typeof window === "undefined") return AGENT_PROFILES.category;
-  const p = new URLSearchParams(window.location.search).get("persona");
-  return p === "planning" ? AGENT_PROFILES.merch : AGENT_PROFILES.category;
-}
+const isMerch = () =>
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("persona") === "planning";
 
 export default function AgentPage() {
   // Resolved once on mount. The profile decides which agent the chat talks to,
   // so it must not change mid-conversation -- a thread belongs to one agent.
-  const [profile] = useState(() => activeProfile());
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: profile.greeting },
-  ]);
+  const [merch] = useState(isMerch);
+  return merch ? <MerchChat /> : <CategoryAgent />;
+}
+
+// ─── Merch Planning Agent: a plain text-to-SQL chat ──────────────────────────
+
+function MerchChat() {
+  const { turns, busy, ask } = useLookupChat(MERCH.id);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
-
-  // Conversation history lives in the Cortex thread, not in this component.
-  // Refs (not state) so the values are current the moment a turn is sent.
-  const threadId = useRef<number | null>(null);
-  const parentMessageId = useRef<number>(0);
-
   // Keep the newest tokens in view while the answer streams in.
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, status]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [turns]);
 
-  /** Apply a streamed event to the in-progress assistant message. */
-  const appendToLast = (fn: (msg: Message) => Message) => {
-    setMessages((prev) => {
-      const next = [...prev];
-      next[next.length - 1] = fn(next[next.length - 1]);
-      return next;
-    });
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = input.trim();
+  const send = () => {
+    if (!input.trim() || busy) return;
+    void ask(input);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setLoading(true);
-    setStatus("");
-
-    try {
-      // Placeholder that the streamed tokens are appended to.
-      setMessages((prev) => [...prev, { role: "assistant", content: "", tables: [] }]);
-
-      await streamAgentChat(
-        {
-          message: userMsg,
-          threadId: threadId.current,
-          parentMessageId: parentMessageId.current,
-          agent: profile.id,
-        },
-        (event) => {
-          if (event.type === "text") {
-            setStatus("");
-            appendToLast((m) => ({ ...m, content: m.content + event.text }));
-          } else if (event.type === "status") {
-            setStatus(event.message);
-          } else if (event.type === "thread") {
-            threadId.current = event.threadId;
-          } else if (event.type === "parent") {
-            // Anchor the next turn to this assistant message.
-            parentMessageId.current = event.messageId;
-          } else if (event.type === "reset") {
-            // Read back whole from the thread after the stream was lost.
-            appendToLast((m) => ({ ...m, content: "", tables: [] }));
-          } else if (event.type === "table") {
-            appendToLast((m) => ({
-              ...m,
-              tables: [
-                ...(m.tables || []),
-                { title: event.title, columns: event.columns, rows: event.rows },
-              ],
-            }));
-          } else if (event.type === "error") {
-            appendToLast((m) => ({
-              ...m,
-              content: m.content + `\n\n_${event.message}_`,
-            }));
-          }
-        },
-      );
-
-      // Guard against a stream that closed without producing any answer.
-      appendToLast((m) =>
-        m.content || m.tables?.length
-          ? m
-          : { ...m, content: "I couldn't generate a response." },
-      );
-    } catch (e) {
-      appendToLast((m) => ({
-        ...m,
-        content: (m.content ? m.content + "\n\n" : "") + `_${e instanceof Error ? e.message : "Sorry, I encountered an error. Please try again."}_`,
-      }));
-    } finally {
-      setLoading(false);
-      setStatus("");
-    }
   };
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-6 border-b border-slate-200 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">{profile.title}</h1>
-            <p className="text-xs text-slate-500">{profile.subtitle}</p>
-          </div>
-        </div>
-      </div>
-
+      <Header title={MERCH.title} subtitle={MERCH.subtitle} />
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {/* An assistant turn that returned a result table gets the full
-                column width. Capping it at 85% like a chat bubble left an 8-column
-                buy-position table showing only 5 columns, hiding the variance the
-                question was about; a user message stays bubble-width. */}
-            <div className={`rounded-xl px-4 py-3 text-sm ${
-              msg.role === "user"
-                ? "max-w-[85%] bg-blue-700 text-white"
-                : `${msg.tables?.length ? "w-full" : "max-w-[85%]"} bg-white border border-slate-200 text-slate-800 shadow-sm`
-            }`}>
-              {msg.role === "user" ? msg.content : (
-                <>
-                  <div className="prose prose-sm max-w-none prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-li:my-0.5">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        table: ({ children }) => (
-                          <div className="my-3 rounded-lg border border-slate-200 overflow-x-auto">
-                            <table className="w-full text-xs border-collapse">{children}</table>
-                          </div>
-                        ),
-                        thead: ({ children }) => (
-                          <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>
-                        ),
-                        th: ({ children }) => (
-                          <th className="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap">{children}</th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="px-3 py-1.5 border-t border-slate-100 whitespace-nowrap">{children}</td>
-                        ),
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-                  {msg.tables?.map((t, ti) => (
-                    <div key={ti} className="my-3">
-                      {t.title && (
-                        <p className="text-xs font-semibold text-slate-600 mb-1">{t.title}</p>
-                      )}
-                      <div className="rounded-lg border border-slate-200 overflow-x-auto">
-                        <table className="w-full text-xs border-collapse">
-                          <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                              {t.columns.map((c) => (
-                                <th
-                                  key={c}
-                                  className={`px-2 py-2 font-semibold text-slate-600 align-bottom ${
-                                    columnKind(c) === "text" ? "text-left" : "text-right"
-                                  }`}
-                                >
-                                  {humaniseColumn(c)}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {t.rows.map((row, ri) => (
-                              <tr key={ri}>
-                                {row.map((cell, ci) => {
-                                  const kind = columnKind(t.columns[ci] ?? "");
-                                  return (
-                                    <td
-                                      key={ci}
-                                      className={`px-2 py-1.5 border-t border-slate-100 whitespace-nowrap ${
-                                        kind === "text"
-                                          ? "text-left"
-                                          : "text-right font-mono tabular-nums"
-                                      }`}
-                                    >
-                                      {fmtCell(cell, kind)}
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm flex items-center gap-2">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-              {status && <span className="text-xs text-slate-500">{status}</span>}
-            </div>
-          </div>
-        )}
+        <Bubble>{MERCH.greeting}</Bubble>
+        {turns.map((t, i) => <LookupExchange key={i} turn={t} currency="PHP" />)}
         <div ref={endRef} />
       </div>
-
       <div className="p-4 border-t border-slate-200 bg-white">
         <div className="flex gap-3">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask about category performance, brand trends, competitive pricing..."
-            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
-          />
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            className="px-4 py-2.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+            placeholder="Ask about the plan, open-to-buy, scenarios..."
+            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
+          <button onClick={send} disabled={busy || !input.trim()}
+            className="px-4 py-2.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
             <Send className="w-4 h-4" />
           </button>
         </div>
         <div className="flex gap-2 mt-2">
-          {profile.prompts.map((q) => (
-            <button
-              key={q}
-              onClick={() => { setInput(q); }}
-              className="text-[11px] px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full hover:bg-slate-200 transition-colors"
-            >
-              {q}
-            </button>
+          {MERCH.prompts.map((q) => (
+            <button key={q} onClick={() => setInput(q)}
+              className="text-[11px] px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full hover:bg-slate-200 transition-colors">{q}</button>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Category Agent: one entry, two agents ───────────────────────────────────
+//
+// A lookup goes to CATEGORY_MANAGER_AGENT (text to SQL over the category
+// semantic view). "Why did <brand> move?" goes to BRAND_INVESTIGATOR_AGENT, which
+// tests every candidate cause on POS and has its figures checked. Routing rules:
+// src/lib/ai/category-route.ts. Each agent keeps its own Cortex thread, so a
+// follow-up continues whichever one it is routed to. The user can force a route.
+//
+// ?q=<question> asks on arrival and ?mode=investigate|lookup forces its route:
+// the brand and demand pages' Investigate links, and the old /investigate page.
+
+const LOOKUP_SAMPLES = [
+  "Top 5 brands by revenue growth this year",
+  "Which brands are losing the most customers in Nappies & Wipes?",
+  "Compare Huggies promotion effectiveness by mechanic",
+];
+const INVESTIGATE_SAMPLES = [
+  "What drove the Huggies Crawler Nappies spike?",
+  "Why is Bugaboo down on last year?",
+  "What is behind Mountain Buggy's growth?",
+];
+
+type Entry = { route: CategoryRoute; index: number; brand: string | null };
+
+const MODES: { id: CategoryMode; label: string }[] = [
+  { id: "auto", label: "Auto" },
+  { id: "lookup", label: "Look up" },
+  { id: "investigate", label: "Investigate" },
+];
+
+function CategoryAgent() {
+  const lookup = useLookupChat("category");
+  const inv = useAgentRun("brandInvestigator", { stage: "BRAND_INVESTIGATE" });
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [brands, setBrands] = useState<string[]>([]);
+  const [mode, setMode] = useState<CategoryMode>("auto");
+  const [input, setInput] = useState("");
+  const busy = lookup.busy || inv.busy;
+  const endRef = useRef<HTMLDivElement>(null);
+  const asked = useRef(false);
+
+  // Brand names for the router. If the list fails, a "why" question still goes
+  // to the investigator, which answers with the valid brands.
+  useEffect(() => {
+    fetch("/api/brand/list")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { brands?: { brand: string }[] } | null) => {
+        if (d?.brands) setBrands(Array.from(new Set(d.brands.map((b) => b.brand))));
+      })
+      .catch(() => {});
+  }, []);
+
+  const send = (question: string, force?: CategoryMode) => {
+    const q = question.trim();
+    if (!q || busy) return;
+    const previous = entries.length ? entries[entries.length - 1].route : null;
+    const { route, brand } = routeCategoryQuestion(q, { brands, mode: force ?? mode, previous });
+    const index = route === "investigate" ? inv.turns.length : lookup.turns.length;
+    setEntries((es) => [...es, { route, index, brand }]);
+    setInput("");
+    void (route === "investigate" ? inv.ask(q) : lookup.ask(q));
+  };
+
+  useEffect(() => {
+    if (asked.current) return;
+    const p = new URLSearchParams(window.location.search);
+    const q = p.get("q")?.slice(0, 500);
+    const m = p.get("mode");
+    if (q) {
+      asked.current = true;
+      send(q, m === "investigate" || m === "lookup" ? m : undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [entries, lookup.turns, inv.turns]);
+
+  const reset = () => { lookup.reset(); inv.reset(); setEntries([]); };
+  const routeHint = useMemo(() => {
+    if (!input.trim() || mode !== "auto") return null;
+    const previous = entries.length ? entries[entries.length - 1].route : null;
+    return routeCategoryQuestion(input, { brands, previous }).route;
+  }, [input, mode, brands, entries]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <Header title="Category Agent"
+        subtitle="Look up any category figure, or investigate what drove a brand's move: every cause tested on POS, every figure checked" />
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+        {entries.length === 0 && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SampleGroup icon={<Search className="w-4 h-4 text-blue-700" />} title="Look up"
+              text="Sales, growth, margin, promotions, segments, CLV, brand switching, competitor prices and DIFOT, from the category semantic view. Growth compares the same weeks of each year."
+              samples={LOOKUP_SAMPLES} onPick={(s) => send(s, "lookup")} disabled={busy} />
+            <SampleGroup icon={<Lightbulb className="w-4 h-4 text-blue-700" />} title="Investigate a brand"
+              text="What drove a brand's move: the 28 days to 7 May 2026 against last year and its market. Tests market, price vs volume, timing, states, stores, classes, SKUs, segments, promotions, competitor prices and supply. Recommends; changes nothing."
+              samples={INVESTIGATE_SAMPLES} onPick={(s) => send(s, "investigate")} disabled={busy} />
+          </div>
+        )}
+
+        {entries.map((e, i) => {
+          if (e.route === "lookup") {
+            const t = lookup.turns[e.index];
+            if (!t) return null;
+            // Resolved again here: a ?q= question is routed before the brand list loads.
+            const brand = e.brand ?? namedBrand(t.question, brands);
+            return (
+              <div key={i} className="space-y-2">
+                <LookupExchange turn={t} currency="AUD" badge={<RouteBadge route="lookup" />}
+                  action={t.done && brand ? (
+                    <button onClick={() => send(investigateQuestion(brand), "investigate")} disabled={busy}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-50">
+                      <Lightbulb className="w-3.5 h-3.5" /> Investigate what is driving {brand}
+                    </button>
+                  ) : null} />
+              </div>
+            );
+          }
+          const t = inv.turns[e.index];
+          if (!t) return null;
+          return (
+            <div key={i} className="space-y-3">
+              <UserBubble>{t.question}</UserBubble>
+              <RouteBadge route="investigate" />
+              <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
+                <div className="h-fit xl:sticky xl:top-4"><ProgressTrail t={t} /></div>
+                <AgentAnswer t={t} tag="rca" />
+              </div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+
+      <div className="p-4 border-t border-slate-200 bg-white space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]" role="radiogroup" aria-label="Route">
+            {MODES.map((m) => (
+              <button key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => setMode(m.id)}
+                className={`px-2.5 py-1.5 rounded-md font-medium transition-colors ${mode === m.id ? "bg-white text-blue-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} disabled={busy}
+            onKeyDown={(e) => e.key === "Enter" && send(input)}
+            placeholder={busy ? "Working…" : entries.length ? "Ask a follow-up" : "Ask a question, or ask why a brand moved"}
+            className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400" />
+          <button onClick={() => send(input)} disabled={busy || !input.trim()}
+            className="px-4 py-2.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+            <Send className="w-4 h-4" />
+          </button>
+          {entries.length > 0 && !busy && (
+            <button onClick={reset} title="Start a new conversation"
+              className="px-3 py-2.5 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 inline-flex items-center gap-1.5 text-xs">
+              <RotateCcw className="w-3.5 h-3.5" /> New
+            </button>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 h-4">
+          {routeHint === "investigate" ? "Will investigate with the Brand Investigator"
+            : routeHint === "lookup" ? "Will look up with the Category Intelligence agent" : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Pieces ──────────────────────────────────────────────────────────────────
+
+function Header({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="p-6 border-b border-slate-200 bg-white">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+          <Bot className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">{title}</h1>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm bg-blue-700 text-white">{children}</div>
+    </div>
+  );
+}
+
+function Bubble({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
+  return (
+    <div className="flex justify-start">
+      <div className={`${wide ? "w-full" : "max-w-[85%]"} rounded-xl px-4 py-3 text-sm bg-white border border-slate-200 text-slate-800 shadow-sm`}>{children}</div>
+    </div>
+  );
+}
+
+/** A question and its text-to-SQL answer. An answer that returned a result table
+ *  gets the full column width: capped at 85% like a chat bubble, an 8-column
+ *  buy-position table showed only 5 columns and hid the variance asked about. */
+function LookupExchange({ turn, currency, badge, action }: {
+  turn: LookupTurn; currency: string; badge?: React.ReactNode; action?: React.ReactNode;
+}) {
+  const answered = turn.content || turn.tables.length;
+  return (
+    <div className="space-y-2">
+      <UserBubble>{turn.question}</UserBubble>
+      {badge}
+      {answered ? (
+        <Bubble wide={turn.tables.length > 0}>
+          <LookupAnswer turn={turn} currency={currency} />
+          {action && <div className="mt-3 pt-3 border-t border-slate-100">{action}</div>}
+        </Bubble>
+      ) : null}
+      {!turn.done && <Working status={turn.status} />}
+    </div>
+  );
+}
+
+function RouteBadge({ route }: { route: CategoryRoute }) {
+  return route === "investigate" ? (
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] text-amber-800">
+      <Sparkles className="w-3 h-3" /> Brand Investigator · every cause tested, figures checked
+    </div>
+  ) : (
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[11px] text-slate-600">
+      <Search className="w-3 h-3" /> Look-up · Category Intelligence semantic view
+    </div>
+  );
+}
+
+function SampleGroup({ icon, title, text, samples, onPick, disabled }: {
+  icon: React.ReactNode; title: string; text: string; samples: string[]; onPick: (s: string) => void; disabled: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+      <div className="flex items-center gap-2">{icon}<h3 className="text-sm font-semibold text-slate-800">{title}</h3></div>
+      <p className="text-xs text-slate-500 mt-1 mb-3">{text}</p>
+      <div className="space-y-2">
+        {samples.map((s) => (
+          <button key={s} onClick={() => onPick(s)} disabled={disabled}
+            className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-left text-xs text-slate-700 transition hover:border-blue-300 hover:bg-blue-50/50 disabled:opacity-50">
+            {s}
+          </button>
+        ))}
       </div>
     </div>
   );

@@ -30,7 +30,8 @@ function aud(n: number) {
   return `$${n.toFixed(0)}`;
 }
 const signed = (v: number | null, unit = "%") => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}${unit}`);
-const investigate = (q: string) => `/investigate?q=${encodeURIComponent(q)}`;
+// The Category Agent's investigation route (the Brand Investigator).
+const investigate = (q: string) => `/agent?mode=investigate&q=${encodeURIComponent(q)}`;
 
 function Kpi({ label, value, sub, tone }: { label: string; value: string; sub?: React.ReactNode; tone?: string }) {
   return (

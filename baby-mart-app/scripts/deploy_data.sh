@@ -137,6 +137,7 @@ SCRIPTS=(
   "$APP_DIR/agent/deploy_supply_agents.sql"              # SUPPLY_RECOVERY_AGENT + SUPPLIER_DIFOT_AGENT
   "$APP_DIR/sql/26_brand_agent_tools.sql"                # Brand Investigator tools
   "$APP_DIR/sql/27_category_semantic_view.sql"           # category semantic view (class, store, region)
+  "$APP_DIR/agent/deploy_agent.sql"                      # CATEGORY_MANAGER_AGENT instructions (tools spliced on below)
   "$APP_DIR/sql/48_negotiation_brief.sql"                # Negotiation Brief tools + briefs
   "$APP_DIR/agent/deploy_brand_agents.sql"               # BRAND_INVESTIGATOR_AGENT + NEGOTIATION_BRIEF_AGENT
   # NPS Analyst: after the campaign voice (40-44) and the supply position (46).

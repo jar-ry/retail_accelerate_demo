@@ -135,7 +135,7 @@ export default function DemandDetailPage() {
               </div>
             </div>
           </div>
-          <Link href={`/investigate?q=${encodeURIComponent(`What drove the ${brand} ${sku} spike?`)}`}
+          <Link href={`/agent?mode=investigate&q=${encodeURIComponent(`What drove the ${brand} ${sku} spike?`)}`}
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100">
             <Bot className="h-3.5 w-3.5" />Ask the Brand Investigator
           </Link>

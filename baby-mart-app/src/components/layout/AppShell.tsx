@@ -330,7 +330,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <SectionLabel>AI Tools</SectionLabel>
                   <NavItem href="/battlecards" icon={Swords} label="Battlecards" color="blue" />
                   <NavItem href="/agent" icon={Bot} label="Category Agent" color="blue" />
-                  <NavItem href="/investigate" icon={Lightbulb} label="Brand Investigator" color="blue" />
                   <NavItem href="/negotiate" icon={Handshake} label="Negotiation Brief" color="blue" />
                   <SectionLabel>Vendor Economics</SectionLabel>
                   <NavItem href="/vendor/profitability" icon={DollarSign} label="Vendor Profitability" color="blue" />

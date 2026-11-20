@@ -3,6 +3,17 @@
 -- ============================================================
 -- Run this script to recreate the agent and evaluation dataset
 -- Requires: ACCOUNTADMIN role, BABY_MART_DEMO database
+--
+-- The lookup half of the Category Manager's one "Category Agent" entry (/agent).
+-- The app sends "why did <brand> move?" to BRAND_INVESTIGATOR_AGENT
+-- (agent/deploy_brand_agents.sql) and everything else here. Run after
+-- sql/27_category_semantic_view.sql; scripts/register_agent_tools.py then splices
+-- the battlecard and planning procedure tools back on (CREATE OR REPLACE drops them).
+--
+-- FY2026 sales end 7 May 2026 and FY2025 is a full year. Compared on totals the
+-- whole business looked ~15% down (Bugaboo -17.6%, "every pram brand -13 to -18%");
+-- on the same weeks Bugaboo is -4.5% and the rest of Prams & Strollers -0.9%.
+-- Hence the like-for-like rule below and in the semantic view.
 -- ============================================================
 
 USE ROLE ACCOUNTADMIN;
@@ -38,6 +49,11 @@ CREATE OR REPLACE AGENT BABY_MART_DEMO.AI.CATEGORY_MANAGER_AGENT
     orchestration: |
       Route ALL data questions (sales, margin, growth, pricing, promotions, segments, CLV, brand switching, DIFOT) to the category_intelligence tool.
       For multi-part questions, make separate tool calls and synthesize results into one answer.
+      Time: sales data ends 7 May 2026, so FY2026 is incomplete and FY2025 is a full year. Never compare FY2026 totals
+      with FY2025 totals. Any growth, decline or "this year vs last year" question compares the same weeks in both
+      years: fiscal_week 27-52 and 1-18 (to 3 May). Say so in the answer, e.g. "FY2026 to 3 May vs the same weeks of FY2025".
+      You answer lookups. The root cause of a brand's move (why it grew, fell or spiked) is the Brand Investigator's job:
+      if asked, give the like-for-like move and the obvious splits, do not name a cause, and suggest investigating it.
       If a question is ambiguous on brand, category, time period, or state — ask ONE clarifying question before querying.
       Never guess or fabricate data. If the tool returns no results, say so clearly.
 

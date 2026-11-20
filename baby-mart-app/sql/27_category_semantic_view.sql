@@ -50,7 +50,7 @@ tables:
         description: Store name
       - name: fiscal_week
         expr: FISCAL_WEEK
-        description: Week number within the calendar year (1-52, ISO-style), carried with the fiscal year. FY2026 runs 1 Jul 2025 - 30 Jun 2026, so FY2026 weeks 27-52 are Jul-Dec 2025 and weeks 1-26 are Jan-Jun 2026.
+        description: Week number within the calendar year (1-52, ISO-style), carried with the fiscal year. FY2026 runs 1 Jul 2025 - 30 Jun 2026, so FY2026 weeks 27-52 are Jul-Dec 2025 and weeks 1-26 are Jan-Jun 2026. Sales data ends 7 May 2026, part way through week 19, so the last complete FY2026 week is 18 (27 Apr - 3 May 2026). For a year-on-year comparison keep both years to the same weeks - fiscal_week BETWEEN 27 AND 52 OR fiscal_week BETWEEN 1 AND 18.
       - name: fiscal_month
         expr: FISCAL_MONTH
         description: Fiscal month number
@@ -59,7 +59,7 @@ tables:
         description: Fiscal quarter number
       - name: fiscal_year
         expr: FISCAL_YEAR
-        description: Fiscal year (July to June; FY2026 = Jul 2025 - Jun 2026)
+        description: Fiscal year (July to June; FY2026 = Jul 2025 - Jun 2026). FY2026 is incomplete - sales end 7 May 2026 - while FY2025 is a full year, so never compare FY2026 totals with FY2025 totals. Growth, decline or 'this year vs last year' must use the same weeks in both years (fiscal_week 27-52 and 1-18).
     measures:
       - name: units_sold
         expr: UNITS_SOLD
@@ -232,6 +232,17 @@ tables:
         description: Orders delivered in full on time
         default_aggregation: sum
 verified_queries:
+  - question: "Top 5 brands by revenue growth this year"
+    sql: |
+      SELECT brand_name,
+        SUM(CASE WHEN fiscal_year = 2026 THEN revenue ELSE 0 END) AS revenue_fy26_ytd,
+        SUM(CASE WHEN fiscal_year = 2025 THEN revenue ELSE 0 END) AS revenue_fy25_same_weeks,
+        (SUM(CASE WHEN fiscal_year = 2026 THEN revenue ELSE 0 END)
+          / NULLIF(SUM(CASE WHEN fiscal_year = 2025 THEN revenue ELSE 0 END), 0) - 1) * 100 AS growth_pct
+      FROM BABY_MART_DEMO.ANALYTICS.DT_SELLTHROUGH_WEEKLY
+      WHERE fiscal_year IN (2025, 2026)
+        AND (fiscal_week BETWEEN 27 AND 52 OR fiscal_week BETWEEN 1 AND 18)
+      GROUP BY brand_name ORDER BY growth_pct DESC LIMIT 5
   - question: "How did Huggies Crawler Nappies sell week by week this year?"
     sql: |
       SELECT fiscal_week, SUM(units_sold) AS units, SUM(revenue) AS revenue
