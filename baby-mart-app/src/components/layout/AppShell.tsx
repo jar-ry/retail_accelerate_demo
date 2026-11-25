@@ -10,7 +10,7 @@ import {
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
   ClipboardCheck, Settings, History, CalendarRange, Filter, Lock, ShieldCheck,
-  PenTool, BookOpen, Activity, Map as MapIcon, Radar, Presentation,
+  PenTool, BookOpen, Activity, Map as MapIcon, Radar, Presentation, Network,
 } from "lucide-react";
 import { DemoGuide } from "@/components/demo/DemoGuide";
 import { DemoSwitch } from "@/components/demo/DemoSwitch";
@@ -345,6 +345,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <SectionLabel>Assessment</SectionLabel>
                   <NavItem href="/assessment" icon={ClipboardCheck} label="AI Assessment" color="blue" />
                   <NavItem href="/settings" icon={Settings} label="Settings" color="blue" />
+                  {/* The same question asked of the semantic view alone, with the
+                      Business Ontology, and with Cortex Sense too. */}
+                  <SectionLabel>Semantic Layer</SectionLabel>
+                  <NavItem href="/ontology" icon={Network} label="Ontology" color="blue" />
                 </>
               ) : persona === "supply" ? (
                 <>

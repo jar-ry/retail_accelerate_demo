@@ -183,6 +183,24 @@ export const AGENTS = {
     label: "NPS Investigator",
     fqn: `${process.env.SENTIMENT_SCHEMA?.trim() || `${DB}.SENTIMENT`}.NPS_INVESTIGATOR_AGENT`,
   },
+  // The Category Manager's Ontology compare page (agent/deploy_ontology_compare_agents.sql):
+  // one agent three times over the same plain semantic view, with no context, the
+  // Business Ontology, or the ontology plus Cortex Sense.
+  cmpSv: {
+    id: "cmpSv",
+    label: "Semantic view",
+    fqn: `${DB}.${SCHEMA_AI}.CM_COMPARE_SV_AGENT`,
+  },
+  cmpOntology: {
+    id: "cmpOntology",
+    label: "Semantic view + ontology",
+    fqn: `${DB}.${SCHEMA_AI}.CM_COMPARE_ONTOLOGY_AGENT`,
+  },
+  cmpSense: {
+    id: "cmpSense",
+    label: "Semantic view + ontology + Cortex Sense",
+    fqn: `${DB}.${SCHEMA_AI}.CM_COMPARE_SENSE_AGENT`,
+  },
 } as const;
 
 export type AgentId = keyof typeof AGENTS;

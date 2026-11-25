@@ -105,12 +105,21 @@ export const DEMO_TRACKS: DemoTrack[] = [
         say: "Each ask is sized from the data. And it's honest: where the DIFOT misses were our own override-sized orders, it offers to waive the credit instead of claiming it. That earns credibility in the room.",
         click: "Approve it for the meeting; it moves from DRAFT to approved.",
       },
+      {
+        title: "Show what context changes",
+        route: "/ontology",
+        show: "The Ontology page: one question asked of the same agent three times over the same semantic view, alone, with the Business Ontology, and with the ontology plus Cortex Sense, checked against an answer worked out from the base tables.",
+        say: "Same model, same data, same question. The only thing that changes is the context. Without it the agent compares a part year with a full year and says every brand shrank. The ontology brings the like-for-like rule; Cortex Sense adds the caveat that the Huggies class rows double count the orders.",
+        click: "Ask \"Which brands are growing fastest this year?\", then \"What is the Huggies DIFOT this year, and how many orders was that?\".",
+        proof: ["Semantic view alone: Nuna -11.0%; with the ontology: Nuna +2.9% like-for-like", "Huggies DIFOT 93.7% on 5,222 orders, only with Cortex Sense"],
+      },
     ],
     close:
       "You walk into ten o'clock knowing the spike isn't in sales, that part of the DIFOT miss was ours, and with asks you can defend line by line. That took ten minutes, not two days.",
     snowflake: [
       "Cortex Agents (Brand Investigator, Negotiation Brief) with procedure tools",
       "Cortex Analyst over a semantic view",
+      "Business Ontology and Cortex Sense as agent context",
       "Dynamic tables over POS",
       "Answer verification against tool output",
       "Snowflake App Runtime",

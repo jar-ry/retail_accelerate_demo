@@ -12,10 +12,10 @@ import { streamAgentChat } from "./agentStream";
 // figure matched a tool result). A follow-up continues the same thread. A
 // dropped connection reconnects to the same run (agentStream.ts).
 
-export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery" | "supplierDifot" | "negotiationBrief" | "hopSandbox" | "npsInvestigator";
+export type AgentId = "campaignBuilder" | "campaignInvestigator" | "planInvestigator" | "planBuilder" | "hopInvestigator" | "brandInvestigator" | "supplyRecovery" | "supplierDifot" | "negotiationBrief" | "hopSandbox" | "npsInvestigator" | "cmpSv" | "cmpOntology" | "cmpSense";
 export type AgentStageId = "BUILDER" | "IDEATION" | "INVESTIGATE" | "PLAN_INVESTIGATE" | "PLAN_BUILDER" | "HOP_INVESTIGATE" | "BRAND_INVESTIGATE" | "SUPPLY_RECOVERY" | "SUPPLY_DIFOT" | "CATEGORY_BRIEF" | "HOP_SANDBOX" | "NPS_INVESTIGATE";
 export type StepState = "running" | "success" | "error";
-export type Step = { id: string; name: string; toolType: string; input: unknown; status: StepState; detail?: string; startedAt: number; endedAt?: number };
+export type Step = { id: string; name: string; toolType: string; input: unknown; status: StepState; detail?: string; startedAt: number; endedAt?: number; result?: unknown };
 export type RunInfo = { runId: string; verified: boolean | null; unmatched: string[]; hasBlock: boolean };
 
 export type Turn = {
@@ -38,7 +38,7 @@ type Event =
   | { type: "parent"; messageId: number }
   | { type: "step"; id: string; name: string; toolType: string; input: unknown }
   | { type: "step_status"; id: string; message: string }
-  | { type: "step_result"; id: string; name: string; status: string }
+  | { type: "step_result"; id: string; name: string; status: string; content?: unknown }
   | { type: "chart"; spec: string }
   | { type: "thinking"; text: string }
   | ({ type: "run" } & RunInfo)
@@ -63,7 +63,8 @@ export function applyEvent(t: Turn, e: Event, now = Date.now()): Turn {
     case "step_status":
       return { ...t, steps: t.steps.map((s) => (s.id === e.id ? { ...s, detail: e.message } : s)) };
     case "step_result":
-      return { ...t, steps: t.steps.map((s) => (s.id === e.id ? { ...s, status: e.status === "success" ? "success" : "error", endedAt: now } : s)) };
+      // The result is kept for pages that show what a tool returned (/ontology).
+      return { ...t, steps: t.steps.map((s) => (s.id === e.id ? { ...s, status: e.status === "success" ? "success" : "error", endedAt: now, result: e.content } : s)) };
     case "chart":
       return { ...t, charts: [...t.charts, e.spec] };
     case "run":
