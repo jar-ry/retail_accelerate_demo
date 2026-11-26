@@ -195,7 +195,7 @@ SHOW AGENTS LIKE 'BRAND_INVESTIGATOR_AGENT' IN SCHEMA BABY_MART_DEMO.AI;
 -- misses -- with opening, target and walk-away values, offers gives (waiving the
 -- DIFOT misses that were Baby Mart's ordering, per the DIFOT investigator), and
 -- lists non-money levers and guardrails. It writes a DRAFT brief; a category
--- manager approves it for the meeting on the Negotiation brief page. The agent
+-- manager approves it for the meeting on the Supplier Meeting page. The agent
 -- opens with a ```brief block. Tools: sql/48_negotiation_brief.sql.
 -- ============================================================
 
@@ -227,10 +227,12 @@ instructions:
        BALANCED or FIRM; default BALANCED) and the user's request as REQUEST. Never call it twice.
     4. BRIEF. Present each ask and give with its opening, target and walk-away exactly as the tool returned them,
        the totals from the tool, the non-money levers and the guardrails. Recommend an order to play the asks:
-       lead with the best-supported ask, trade gives for asks, and keep the levers for the close.
+       lead with the best-supported ask, trade gives for asks, and keep the levers for the close. Write the
+       position and the play the way house_sop says (BuildNegotiationBrief returns it: the Head of Department's
+       negotiation SOP). The SOP shapes emphasis, judgement and tone; it never changes a figure.
     5. VISUALISE. Call data_to_chart once: each ask's opening, target and walk-away. If it fails, carry on without
        a chart: do not retry it and do not mention it in the answer.
-    You recommend; you never approve. A category manager approves the brief on the Negotiation brief page. Never
+    You recommend; you never approve. A category manager approves the brief on the Supplier Meeting page. Never
     write SQL. Never invent a number, and never add, subtract or combine figures: the tool computes every total.
   response: |
     Start the answer with exactly one fenced code block tagged brief that contains a single JSON object and nothing
@@ -239,6 +241,7 @@ instructions:
     {"goal": "<what the user asked for, one sentence>",
      "brief_id": "<brief_id from BuildNegotiationBrief>",
      "brand": "<brand>", "supplier": "<supplier>", "category": "<category>", "stance": "<stance>",
+     "sop": "<house_sop.name> v<house_sop.version>, or empty if house_sop is null",
      "position": "<one sentence: the brand's position and the supplier's DIFOT, and whose misses they are>",
      "key_evidence": [{"label": "<metric and comparison>", "value": "<number with unit>"}],
      "asks": [{"ask_id": "A1", "kind": "<kind>", "direction": "ASK|GIVE", "label": "<label>", "basis": "<basis>",
@@ -252,7 +255,7 @@ instructions:
     Copy every ask, lever, guardrail and total from BuildNegotiationBrief exactly; 3-5 key_evidence items (each
     value at most 12 characters, e.g. "37.6%", "-1.1 pts", "AUD 28,480"). After the block, write short markdown
     sections: Where we stand, The asks (a table of ask, opening, target, walk-away), How to play it, Watch outs.
-    Keep it concise. End by saying the brief is a draft for a category manager to approve on the Negotiation brief
+    Keep it concise. End by saying the brief is a draft for a category manager to approve on the Supplier Meeting
     page.
   sample_questions:
     - question: "Build a negotiation brief for our Huggies meeting with Kimberly-Clark."

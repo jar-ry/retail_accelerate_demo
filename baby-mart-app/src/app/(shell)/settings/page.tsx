@@ -6,6 +6,7 @@ import {
   AlertTriangle, Check, Loader2, X,
 } from "lucide-react";
 import PlanningParametersTab from "./_components/PlanningParametersTab";
+import NegotiationRulesTab from "./_components/NegotiationRulesTab";
 
 // ─── Settings: SOP and insight templates ──────────────────────────────────────
 //
@@ -67,17 +68,25 @@ Your analysis here.
 ## Where the risk sits
 Name the department or class, and the metric that shows it.`;
 
-type SettingsTab = "templates" | "parameters";
+type SettingsTab = "templates" | "parameters" | "negotiation";
+
+/** ?tab=parameters|negotiation opens that tab; ?template=NAME selects a template
+ *  (the Supplier Meeting page links straight to its SOP). */
+const urlParam = (k: string) => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(k));
 
 export default function SettingsPage() {
   // Read from window rather than useSearchParams: this page is statically
   // prerendered and useSearchParams would force it into a Suspense boundary.
   const [tab, setTab] = useState<SettingsTab>(() => {
-    if (typeof window === "undefined") return "templates";
-    return new URLSearchParams(window.location.search).get("tab") === "parameters"
-      ? "parameters"
-      : "templates";
+    const t = urlParam("tab");
+    return t === "parameters" || t === "negotiation" ? t : "templates";
   });
+  // An in-app link (Supplier Meeting -> Settings) renders this page before the URL
+  // changes, so read it again once mounted: by then the router has updated it.
+  useEffect(() => {
+    const t = urlParam("tab");
+    if (t === "parameters" || t === "negotiation") setTab(t);
+  }, []);
 
   const [list, setList] = useState<TemplateListItem[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -101,8 +110,10 @@ export default function SettingsPage() {
       return [];
     }
     setList(body.templates);
-    if (selectName) setSelected(selectName);
-    else if (!selected && body.templates.length > 0) {
+    // ?template=NAME (read here, after mount, for the same reason as ?tab).
+    const want = selectName ?? selected ?? urlParam("template");
+    if (want && body.templates.some((t: TemplateListItem) => t.templateName === want)) setSelected(want);
+    else if (body.templates.length > 0) {
       setSelected(body.templates[0].templateName);
     }
     return body.templates as TemplateListItem[];
@@ -271,6 +282,7 @@ export default function SettingsPage() {
     <div className="flex items-center gap-1 border-b border-slate-200 mb-5">
       {([
         { id: "templates" as const, label: "SOP & Templates" },
+        { id: "negotiation" as const, label: "Negotiation rules" },
         { id: "parameters" as const, label: "Planning parameters" },
       ]).map((t) => (
         <button
@@ -303,6 +315,21 @@ export default function SettingsPage() {
     );
   }
 
+  if (tab === "negotiation") {
+    return (
+      <div className="p-6">
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-slate-900">Settings</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            How every supplier brief is sized: stance shares, walk-away, co-funding and guardrails
+          </p>
+        </div>
+        {tabBar}
+        <NegotiationRulesTab />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="p-6 flex flex-col items-center justify-center h-96">
@@ -318,7 +345,8 @@ export default function SettingsPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Assessment Settings</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Standard operating procedures and insight templates used by the AI Assessment
+            Standard operating procedures and insight templates used by the AI Assessment, and by the Supplier Meeting
+            (&quot;Supplier negotiation prep&quot;)
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -416,6 +444,11 @@ export default function SettingsPage() {
                 <span className="font-semibold text-slate-800">Template</span> controls the{" "}
                 <em>shape</em> of the output. Every <code className="font-mono">## </code>
                 heading becomes a section of the assessment, in the order written.
+              </p>
+              <p>
+                <span className="font-semibold text-slate-800">Supplier negotiation prep</span> also writes the Supplier
+                Meeting: the battlecard&apos;s arguments and the brief follow its SOP, and the approach follows its
+                headings. Each one names the version it was written to.
               </p>
               <p className="text-slate-500">
                 Figures always come from the dashboards, never from the model.

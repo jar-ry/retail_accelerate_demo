@@ -25,9 +25,23 @@
 -- a sales spike that is a planner override rather than demand, a DIFOT miss that
 -- is ours.
 --
+-- NEGOTIATION_EVIDENCE is also the battlecard's source (sql/09): the Supplier
+-- Meeting page (/meeting/<brand>) shows its figures as the facts, the battlecard's
+-- arguments are worded from them, and the brief is sized from them, so the three
+-- steps of the page cannot disagree. It therefore also carries what only the
+-- battlecard used to read: customer value, rate of sale, top state, range mix.
+--
 --   AI.NEGOTIATION_EVIDENCE(BRAND)                       read only
 --   AI.BUILD_NEGOTIATION_BRIEF(BRAND, STANCE, REQUEST)   writes a DRAFT
 --   ANALYTICS.APPROVE_NEGOTIATION_BRIEF(BRIEF_ID, APPROVER, NOTE)  the app's approve
+--   ANALYTICS.SAVE_NEGOTIATION_SETTING(KEY, VALUE, BY, NOTE)       Settings > Negotiation rules
+--
+-- House rules, not the model's: the sizing reads NEGOTIATION_SETTING (the stance
+-- shares, walk-away, promo co-funding, DIFOT credit, dependency share), which the
+-- Head of Department edits on Settings > Negotiation rules with an audit trail;
+-- the agent writes the position and the play to the "Supplier negotiation prep"
+-- SOP (Settings > SOP & Templates, sql/15), which the battlecard (sql/09) also
+-- follows. Each brief records the SOP version and the rules it was sized with.
 --
 -- Run AFTER sql/09 and sql/47. Idempotent.
 -- ============================================================
@@ -39,6 +53,16 @@ USE SCHEMA BABY_MART_DEMO.ANALYTICS;
 CREATE TABLE IF NOT EXISTS BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING (
   SETTING_KEY VARCHAR, SETTING_VALUE FLOAT, LABEL VARCHAR, DESCRIPTION VARCHAR
 ) COMMENT = 'How the negotiation brief builder sizes its asks.';
+
+-- The negotiation rules are the Head of Department's, edited on Settings >
+-- Negotiation rules (SAVE_NEGOTIATION_SETTING below). Who changed each one and
+-- when, and every change before it.
+ALTER TABLE BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING ADD COLUMN IF NOT EXISTS UPDATED_BY VARCHAR;
+ALTER TABLE BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING ADD COLUMN IF NOT EXISTS UPDATED_AT TIMESTAMP_NTZ;
+
+CREATE TABLE IF NOT EXISTS BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING_HISTORY (
+  SETTING_KEY VARCHAR, OLD_VALUE FLOAT, NEW_VALUE FLOAT, CHANGED_BY VARCHAR, CHANGED_AT TIMESTAMP_NTZ, NOTE VARCHAR
+) COMMENT = 'Every change to a negotiation rule, append-only.';
 
 MERGE INTO BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING t
 USING (
@@ -52,7 +76,9 @@ USING (
     ('DEPENDENCY_SHARE_PCT',       30,   'Dependency share (%)',                         'A brand with this share of its category or more is one the category depends on.')
   AS v(SETTING_KEY, SETTING_VALUE, LABEL, DESCRIPTION)
 ) s ON t.SETTING_KEY = s.SETTING_KEY
-WHEN NOT MATCHED THEN INSERT VALUES (s.SETTING_KEY, s.SETTING_VALUE, s.LABEL, s.DESCRIPTION);
+WHEN NOT MATCHED THEN INSERT (SETTING_KEY, SETTING_VALUE, LABEL, DESCRIPTION, UPDATED_BY, UPDATED_AT)
+  VALUES (s.SETTING_KEY, s.SETTING_VALUE, s.LABEL, s.DESCRIPTION, 'seed', CURRENT_TIMESTAMP());
+UPDATE BABY_MART_DEMO.ANALYTICS.NEGOTIATION_SETTING SET UPDATED_BY = 'seed', UPDATED_AT = CURRENT_TIMESTAMP() WHERE UPDATED_BY IS NULL;
 
 CREATE TABLE IF NOT EXISTS BABY_MART_DEMO.ANALYTICS.NEGOTIATION_BRIEF (
   BRIEF_ID VARCHAR, BRAND_NAME VARCHAR, SUPPLIER_NAME VARCHAR, DISTRIBUTOR VARCHAR, CATEGORY VARCHAR,
@@ -132,6 +158,17 @@ const sw = rows(`SELECT SUM(IFF(TO_BRAND = ?, SWITCH_COUNT, 0)) AS GAINED, SUM(I
 const lossTo = rows(`SELECT TO_BRAND, SUM(SWITCH_COUNT) AS N FROM ${A}.DT_BRAND_SWITCHING WHERE FROM_BRAND = ? GROUP BY 1 ORDER BY 2 DESC LIMIT 1`, [brand])[0] || {};
 const price = rows(`SELECT AVG(AVG_PRICE_GAP_PCT) AS GAP FROM ${A}.DT_COMPETITIVE_POSITION WHERE BRAND_NAME = ? AND FISCAL_YEAR = ?`, [brand, cy])[0];
 
+// What the battlecard (sql/09) adds: it reads this evidence, so the Supplier Meeting
+// page shows one set of figures from the facts to the brief. FY2026 to date, the
+// brand's category; CLV is weighted by customers, never a plain average.
+const mix = rows(`SELECT STATE, CLASS, SUM(REVENUE) AS REV FROM ${A}.DT_SELLTHROUGH_WEEKLY
+  WHERE BRAND_NAME = ? AND CATEGORY = ? AND FISCAL_YEAR = ? GROUP BY 1, 2`, [brand, category, cy]);
+const sumBy = (k) => { const m = {}; for (const r of mix) m[r[k]] = (m[r[k]] || 0) + r.rev; return Object.keys(m).map((x) => ({ key: x, rev: m[x] })).sort((a, b) => b.rev - a.rev); };
+const states = sumBy("state"), classes = sumBy("class");
+const ros = rows(`SELECT AVG(IFF(BRAND_NAME = ?, RATE_OF_SALE, NULL)) AS B, AVG(RATE_OF_SALE) AS C FROM ${A}.DT_SELLTHROUGH_WEEKLY WHERE CATEGORY = ? AND FISCAL_YEAR = ?`, [brand, category, cy])[0];
+const clv = rows(`SELECT SUM(AVG_CLV * CUSTOMER_COUNT) / NULLIF(SUM(CUSTOMER_COUNT), 0) AS CLV, SUM(CUSTOMER_COUNT) AS CUST FROM ${A}.DT_CLV_BY_BRAND WHERE BRAND_NAME = ?`, [brand])[0];
+const gainFrom = rows(`SELECT FROM_BRAND, SUM(SWITCH_COUNT) AS N FROM ${A}.DT_BRAND_SWITCHING WHERE TO_BRAND = ? GROUP BY 1 ORDER BY 2 DESC LIMIT 1`, [brand])[0] || {};
+
 // The supplier's DIFOT on the brand, and whose misses they are (sql/47).
 const dist = rows(`SELECT SUPPLIER_NAME FROM ${C}.DIM_DISTRIBUTOR WHERE ARRAY_CONTAINS(?::VARIANT, SPLIT(BRANDS, ','))`, [brand])[0];
 let difot = null;
@@ -157,11 +194,16 @@ return JSON.stringify({ ok: true, brand, category, supplier: posSupplier, distri
     share_change_pts: share !== null && sharePy !== null ? r1(share - sharePy) : null, rank_in_category: rank, brands_in_category: peers.length },
   promo: { promo_discount_ytd_aud: r0(promo.disc), promo_discount_annual_aud: r0(promo.disc * annual),
     margin_per_aud_discount: mechDisc ? r2(mechPm / mechDisc) : null, best_mechanic: mech.length ? mech[0].mechanic : null },
-  switching: { gained: r0(sw.gained), lost: r0(sw.lost), net: r0(sw.gained - sw.lost), top_loss_to: lossTo.to_brand || null, top_loss_to_count: r0(lossTo.n) },
+  switching: { gained: r0(sw.gained), lost: r0(sw.lost), net: r0(sw.gained - sw.lost), top_loss_to: lossTo.to_brand || null, top_loss_to_count: r0(lossTo.n),
+    top_gain_from: gainFrom.from_brand || null, top_gain_from_count: r0(gainFrom.n) },
   price_vs_competitors_pct: r1(price.gap), price_note: "Baby Mart's shelf price against competitors' (Woolworths, Coles and others) for the same products, FY2026; positive means Baby Mart is dearer.",
   unit_cost_aud: r2(promo.unit_cost),
+  customers: { clv_aud: r0(clv.clv), customers: r0(clv.cust) },
+  rate_of_sale: { brand: r1(ros.b), category: r1(ros.c) },
+  geography: states.length ? { top_state: states[0].key, top_state_share_pct: r1(me.rev ? (100 * states[0].rev) / me.rev : null) } : null,
+  range: classes.slice(0, 4).map((c) => ({ class: c.key, share_pct: r1(me.rev ? (100 * c.rev) / me.rev : null) })),
   difot, overrides,
-  provenance: "Sales, margin, promotions, switching and prices are REAL POS rows (FY2026 to date, the battlecard's base); DIFOT and attribution come from the PO lines (deliveries since 6 April); store stock positions are MODELLED." });
+  provenance: "Sales, margin, promotions, switching, prices, customer value and range mix are REAL POS rows (FY2026 to date, the battlecard's base); DIFOT and attribution come from the PO lines (deliveries since 6 April); store stock positions are MODELLED." });
 $$;
 
 -- ---------- BUILD_NEGOTIATION_BRIEF ----------
@@ -193,6 +235,10 @@ const e = JSON.parse(rs.getColumnValue(1));
 if (!e.ok) return JSON.stringify(e);
 const S = {};
 for (const r of rows(`SELECT SETTING_KEY, SETTING_VALUE FROM ${A}.NEGOTIATION_SETTING`)) S[r.setting_key] = r.setting_value;
+// The Head of Department's negotiation SOP (Settings > SOP & Templates). It shapes
+// how the agent writes the position and the play; the sizing below is the rules'.
+const sopRow = rows(`SELECT TEMPLATE_NAME, SOP_TEXT, VERSION, UPDATED_BY FROM ${A}.ASSESSMENT_TEMPLATE WHERE TEMPLATE_NAME = 'Supplier negotiation prep'`)[0] || null;
+const sop = sopRow ? { name: sopRow.template_name, version: sopRow.version, updated_by: sopRow.updated_by } : null;
 const stance = /^(COLLABORATIVE|FIRM)$/i.test(String(STANCE || "").trim()) ? String(STANCE).trim().toUpperCase() : "BALANCED";
 const tShare = S["TARGET_SHARE_" + stance], wShare = S.WALKAWAY_SHARE;
 const s = e.sales, f = e.annualise_factor;
@@ -261,7 +307,9 @@ const totals = { opening_aud: r0(sum("opening_aud", "ASK") - sum("opening_aud", 
 // Write the DRAFT (and retire older drafts for the brand).
 const id = "NEG-" + rows(`SELECT TO_CHAR(CURRENT_TIMESTAMP(), 'YYMMDDHH24MISS') || LPAD(UNIFORM(0, 99, RANDOM())::STRING, 2, '0') AS ID`)[0].id;
 rows(`UPDATE ${A}.NEGOTIATION_BRIEF SET STATUS = 'SUPERSEDED' WHERE BRAND_NAME = ? AND STATUS = 'DRAFT'`, [e.brand]);
-const evidence = { sales: s, promo: e.promo, switching: e.switching, difot: d, levers, guardrails: guard, totals };
+const evidence = { sales: s, promo: e.promo, switching: e.switching, difot: d, levers, guardrails: guard, totals, sop,
+  rules: { stance, target_share: tShare, walkaway_share: wShare, promo_fund_opening_pct: S.PROMO_FUND_OPENING_PCT,
+    difot_credit_pct: S.DIFOT_CREDIT_PCT, dependency_share_pct: S.DEPENDENCY_SHARE_PCT } };
 rows(`INSERT INTO ${A}.NEGOTIATION_BRIEF (BRIEF_ID, BRAND_NAME, SUPPLIER_NAME, DISTRIBUTOR, CATEGORY, STANCE, REQUEST, STATUS, OPENING_AUD, TARGET_AUD, WALKAWAY_AUD, EVIDENCE, CREATED_BY, CREATED_AT)
   SELECT ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, PARSE_JSON(?), 'NEGOTIATION_BRIEF_AGENT', CURRENT_TIMESTAMP()`,
   [id, e.brand, e.supplier, e.distributor, e.category, stance, String(REQUEST || "").slice(0, 1000), totals.opening_aud, totals.target_aud, totals.walkaway_aud, JSON.stringify(evidence)]);
@@ -273,8 +321,44 @@ asks.forEach((a, i) => {
 
 return JSON.stringify({ ok: true, brief_id: id, status: "DRAFT", brand: e.brand, supplier: e.supplier, distributor: e.distributor, category: e.category, stance,
   target_share: tShare, walkaway_share: wShare, asks, levers, guardrails: guard, totals,
-  rule: "Opening = the full sized ask; target = opening x the stance's share; walk-away = opening x the walk-away share (0 for the DIFOT credit, which is tradeable). Totals are asks less gives. Annual values are FY2026 to date x 52 / weeks traded.",
-  next: "A category manager approves the brief on the Negotiation brief page before the meeting." });
+  rule: "Opening = the full sized ask; target = opening x the stance's share; walk-away = opening x the walk-away share (0 for the DIFOT credit, which is tradeable). Totals are asks less gives. Annual values are FY2026 to date x 52 / weeks traded. The shares and percentages are the negotiation rules on Settings.",
+  house_sop: sopRow ? { name: sopRow.template_name, version: sopRow.version, text: sopRow.sop_text } : null,
+  next: "A category manager approves the brief on the Supplier Meeting page before the meeting." });
+$$;
+
+-- ---------- SAVE_NEGOTIATION_SETTING ----------
+-- Settings > Negotiation rules. One rule per call, as the signed-in user, with a
+-- reason. Refuses a value out of range, and a change that would put the stances
+-- out of order (walk-away < collaborative <= balanced <= firm): a firm brief
+-- that keeps less than a balanced one is a typo, not a policy.
+CREATE OR REPLACE PROCEDURE BABY_MART_DEMO.ANALYTICS.SAVE_NEGOTIATION_SETTING(SETTING_KEY VARCHAR, SETTING_VALUE FLOAT, CHANGED_BY VARCHAR, NOTE VARCHAR)
+RETURNS VARCHAR
+LANGUAGE JAVASCRIPT
+COMMENT = 'Changes one negotiation rule (Settings > Negotiation rules), validated, with an audit row.'
+EXECUTE AS OWNER
+AS
+$$
+const A = "BABY_MART_DEMO.ANALYTICS";
+const RANGE = {
+  TARGET_SHARE_COLLABORATIVE: [0.05, 1], TARGET_SHARE_BALANCED: [0.05, 1], TARGET_SHARE_FIRM: [0.05, 1], WALKAWAY_SHARE: [0, 0.95],
+  PROMO_FUND_OPENING_PCT: [0, 100], DIFOT_CREDIT_PCT: [0, 20], DEPENDENCY_SHARE_PCT: [5, 100],
+};
+const key = String(SETTING_KEY || "").trim().toUpperCase(), v = Number(SETTING_VALUE);
+if (!RANGE[key]) return JSON.stringify({ ok: false, error: `No negotiation rule ${key}.` });
+if (!isFinite(v) || v < RANGE[key][0] || v > RANGE[key][1])
+  return JSON.stringify({ ok: false, error: `${key} must be between ${RANGE[key][0]} and ${RANGE[key][1]}.` });
+const cur = {};
+const rs = snowflake.createStatement({ sqlText: `SELECT SETTING_KEY, SETTING_VALUE FROM ${A}.NEGOTIATION_SETTING` }).execute();
+while (rs.next()) cur[rs.getColumnValue(1)] = rs.getColumnValue(2);
+if (!(key in cur)) return JSON.stringify({ ok: false, error: `No negotiation rule ${key}.` });
+const next = Object.assign({}, cur, { [key]: v });
+if (!(next.WALKAWAY_SHARE < next.TARGET_SHARE_COLLABORATIVE && next.TARGET_SHARE_COLLABORATIVE <= next.TARGET_SHARE_BALANCED && next.TARGET_SHARE_BALANCED <= next.TARGET_SHARE_FIRM))
+  return JSON.stringify({ ok: false, error: "The stances must stay in order: walk-away below collaborative, and collaborative <= balanced <= firm." });
+const who = String(CHANGED_BY || "unknown").slice(0, 200), note = String(NOTE || "").slice(0, 1000);
+snowflake.createStatement({ sqlText: `UPDATE ${A}.NEGOTIATION_SETTING SET SETTING_VALUE = ?, UPDATED_BY = ?, UPDATED_AT = CURRENT_TIMESTAMP() WHERE SETTING_KEY = ?`, binds: [v, who, key] }).execute();
+snowflake.createStatement({ sqlText: `INSERT INTO ${A}.NEGOTIATION_SETTING_HISTORY (SETTING_KEY, OLD_VALUE, NEW_VALUE, CHANGED_BY, CHANGED_AT, NOTE) SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?`,
+  binds: [key, cur[key], v, who, note] }).execute();
+return JSON.stringify({ ok: true, key, old_value: cur[key], new_value: v, changed_by: who });
 $$;
 
 -- ---------- APPROVE_NEGOTIATION_BRIEF ----------

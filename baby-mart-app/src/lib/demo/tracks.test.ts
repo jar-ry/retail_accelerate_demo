@@ -34,19 +34,36 @@ describe("demo talk tracks", () => {
 
   it("finds the step for the page being shown", () => {
     const cat = trackById("category")!;
-    expect(stepForPath(cat, "/brand/Huggies")).toBe(1);
-    expect(stepForPath(cat, "/brand/Huggies/")).toBe(1);
+    expect(stepForPath(cat, "/category/nappies-wipes")).toBe(1);
+    expect(stepForPath(cat, "/brand/Huggies")).toBe(2);
+    expect(stepForPath(cat, "/brand/Huggies/")).toBe(2);
+    expect(stepForPath(cat, "/meeting/Huggies")).toBe(5);
     expect(stepForPath(cat, "/vendor/scorecard")).toBe(-1);
-    // /agent appears twice: the current step wins when it matches.
-    expect(stepForPath(cat, "/agent")).toBe(2);
-    expect(stepForPath(cat, "/agent", 3)).toBe(3);
+    // /agent appears twice (decline, then spike): the current step wins when it matches.
+    expect(stepForPath(cat, "/agent")).toBe(3);
+    expect(stepForPath(cat, "/agent", 4)).toBe(4);
+    // The brand page's Investigate links: the question picks the step, whatever is stored.
+    const spike = `?mode=investigate&q=${encodeURIComponent("What drove the Huggies Crawler Nappies spike?")}&persona=category`;
+    const decline = `?mode=investigate&q=${encodeURIComponent("Why is Huggies down on last year?")}`;
+    expect(stepForPath(cat, "/agent", 3, spike)).toBe(4);
+    expect(stepForPath(cat, "/agent", -1, spike)).toBe(4);
+    expect(stepForPath(cat, "/agent", 4, decline)).toBe(3);
+    // A question no step asks falls back to the stored step on that page.
+    expect(stepForPath(cat, "/agent", 4, "?q=Why%20is%20Bugaboo%20down%3F")).toBe(4);
     expect(stepForPath(trackById("campaign")!, "/campaigns/performance/camp-001")).toBe(1);
   });
 
   it("tags shared pages with the persona so the sidebar survives the reload", () => {
     const cat = trackById("category")!;
-    expect(stepHref(cat, cat.steps[3])).toBe("/agent?persona=category");
-    expect(stepHref(cat, cat.steps[2])).toMatch(/^\/agent\?mode=investigate&q=.+&persona=category$/);
+    expect(stepHref(cat, { title: "", route: "/agent", show: "", say: "" })).toBe("/agent?persona=category");
+    for (const i of [3, 4]) expect(stepHref(cat, cat.steps[i])).toMatch(/^\/agent\?mode=investigate&q=.+&persona=category$/);
     expect(stepHref(cat, cat.steps[0])).toBe("/dashboard");
+  });
+
+  it("asks the same questions as the brand page's buttons", () => {
+    const cat = trackById("category")!;
+    const q = (i: number) => new URLSearchParams(cat.steps[i].route.split("?")[1]).get("q");
+    expect(q(3)).toBe("Why is Huggies down on last year?");
+    expect(q(4)).toBe("What drove the Huggies Crawler Nappies spike?");
   });
 });

@@ -10,8 +10,8 @@ import type { RunInfo } from "@/components/agent/useAgentRun";
 //
 // The ```brief block: each sized ask (and give) with its opening, target and
 // walk-away, the tool's totals, the levers and guardrails, and how to play the
-// meeting. The agent only writes the DRAFT; a category manager approves it here
-// (POST /api/negotiation). The card reads the brief's live status, so a brief
+// meeting. The agent only writes the DRAFT; a category manager approves it here,
+// in step 2 of the Supplier Meeting page, or in step 3 (POST /api/negotiation). The card reads the brief's live status, so a brief
 // approved elsewhere (or superseded by a newer draft) shows as such.
 
 export type BriefAsk = {
@@ -19,7 +19,7 @@ export type BriefAsk = {
   opening_aud?: number; target_aud?: number; walkaway_aud?: number; guardrails?: Guardrail[];
 };
 export type BriefBlock = {
-  goal: string; brief_id: string; brand?: string; supplier?: string; category?: string; stance?: string; position?: string;
+  goal: string; brief_id: string; brand?: string; supplier?: string; category?: string; stance?: string; position?: string; sop?: string;
   key_evidence?: Evidence[]; asks?: BriefAsk[]; levers?: { kind: string; label: string; basis?: string }[];
   totals?: { opening_aud?: number; target_aud?: number; walkaway_aud?: number; gives_aud?: number };
   guardrails?: Guardrail[]; play?: string[];
@@ -68,6 +68,7 @@ export function BriefCard({ b, run, onApproved }: { b: BriefBlock; run?: RunInfo
       </div>
       <h2 className="mt-3 text-base font-semibold leading-snug text-slate-900">{b.goal}</h2>
       <p className="mt-1 text-xs text-slate-600">{[b.brand, b.supplier, b.category].filter(Boolean).join(" · ")}</p>
+      {b.sop && <p className="mt-0.5 text-[10px] text-violet-700">Written to your SOP: {b.sop}. Sized by your negotiation rules.</p>}
       {b.position && <p className="mt-2 text-xs text-slate-700">{b.position}</p>}
       <div className="mt-4"><EvidenceGrid items={b.key_evidence} /></div>
 

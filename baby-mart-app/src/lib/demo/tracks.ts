@@ -53,80 +53,84 @@ export const DEMO_TRACKS: DemoTrack[] = [
     role: "Category Manager",
     minutes: 10,
     hook:
-      "Imagine you wake up tomorrow and Kimberly-Clark's account team is in your office at ten. The supply report says Huggies Crawler Nappies are spiking, the dashboard says Bugaboo is sliding, and you have an hour to work out what is real and what to ask for.",
+      "Imagine you wake up tomorrow and you run Nappies & Wipes. Your biggest brand, Huggies, is losing share and making less margin than the rest of the category, the supply team's feed says its Crawler Nappies are spiking, and Kimberly-Clark's account team is in your office at ten.",
     stakes:
-      "Walk in with the wrong story and you either concede margin on a spike that never sold, or blame a supplier for misses that were your own orders.",
+      "Walk in with the wrong story and you either concede margin on a spike that never sold, or blame a supplier for misses that were your own orders, while the real decline goes unfixed.",
     today: [
       "Pull POS, the demand feed and the DIFOT scorecard into three spreadsheets that don't agree",
       "Ask an analyst \"why\" and wait two days for a deck",
       "Build the negotiation ask from last year's template and gut feel",
     ],
     withIt: [
-      "One set of numbers from the tills, on every page",
+      "One set of numbers from the tills, from the dashboard down to the brand",
       "An investigator that tests every cause and shows its working, with each figure checked against the data",
-      "Asks sized from the data, with what to give and where to walk away",
+      "A supplier meeting prepared from the same evidence: the arguments, the sized asks, what to give and where to walk away",
+      "Written your way: the AI follows your Head of Department's negotiation SOP, and the asks are sized by their rules",
     ],
     steps: [
       {
         title: "Start where the day starts",
         route: "/dashboard",
-        show: "Category Performance Dashboard: last 28 days against last year, the brand matrix, top performers and underperformers.",
-        say: "Every number here comes straight from the tills, refreshed by dynamic tables. Every other page reads the same figures, so nobody argues about whose spreadsheet is right.",
-        click: "Bugaboo sits in Underperformers. Note it; we'll come back. Open Huggies from the sidebar.",
+        show: "Category Performance Dashboard: the last 28 days against the same days last year, and the Brand Performance Matrix (growth across, margin up, bubble size is revenue).",
+        say: "Every number here comes straight from the tills, refreshed by dynamic tables, and every page below reads the same figures. I run Nappies & Wipes, so let's go to my category.",
+        click: "Open Nappies & Wipes from the sidebar.",
       },
       {
-        title: "The spike that isn't",
+        title: "My category: one brand stands out",
+        route: "/category/nappies-wipes",
+        show: "The Nappies & Wipes matrix against the category's own lines: Huggies is alone in the bottom-left, growing slower and earning less margin than the category. The ranking shows it is also the biggest brand, and losing share.",
+        say: "The category is roughly flat. Huggies, my number one brand, is down 4.5% and makes 1.3 points less margin than the category. When the biggest brand underperforms on both, the whole category feels it.",
+        click: "Click Huggies.",
+        proof: ["Huggies -4.5% vs the category -0.9%", "Margin 37.4% vs 38.7% for the category", "#1 brand, 36.0% share, down 1.4 pts"],
+      },
+      {
+        title: "The brand page",
         route: "/brand/Huggies",
-        show: "The amber banner: \"Reported demand disagrees with POS\" for Crawler Nappies, with the class table flagged reported ≠ POS.",
-        say: "The supply team's demand feed says Crawler Nappies are up. The tills say they aren't. Before anyone negotiates on a spike, let's find out which one is right.",
-        click: "Click the Investigate link on Crawler Nappies.",
-        proof: ["Crawler Nappies +15.0% reported vs POS, FY2026 weeks 1-19"],
+        show: "The Huggies KPIs, the peer comparison and the class table, and an amber banner: \"Reported demand disagrees with POS\" for Crawler Nappies.",
+        say: "Two things to explain before Kimberly-Clark walk in: why is Huggies down, and why does the supply team's demand feed say Crawler Nappies are spiking when the tills don't? Let's take the decline first.",
+        click: "Click Investigate decline.",
+        proof: ["Revenue AUD 81.4K in 28 days, -4.5% vs last year", "Crawler Nappies reported demand +15.0% vs POS, FY2026 weeks 1-19"],
       },
       {
-        title: "Investigate: is it in sales at all?",
+        title: "Investigate the decline",
+        route: `/agent?mode=investigate&q=${q("Why is Huggies down on last year?")}`,
+        show: "The Brand Investigator's progress trail (each cause tested as a tool call) and the root-cause card: the causal chain, What was tested with a verdict for each cause, and the actions.",
+        say: "It rules out the easy answers first. The market grew, price barely moved, supply and competitor prices didn't drive it. It's volume, and one group explains it: guest shoppers without a loyalty card are buying less Huggies, while loyalty members actually grew. And it flags something separate: four manual overrides inflating the Crawler Nappies demand feed.",
+        click: "Go back to Huggies and click Investigate the spike (or press Next).",
+        proof: ["Market (other Nappies & Wipes brands) +1.2% while Huggies fell 4.5%", "Guest shoppers -18.2% (about AUD -5.8K); loyalty segments +3.7%", "Volume is 82.6% of the change; price, supply and competitor price ruled out"],
+      },
+      {
+        title: "Investigate the spike: it isn't in sales",
         route: `/agent?mode=investigate&q=${q("What drove the Huggies Crawler Nappies spike?")}`,
-        show: "The Brand Investigator's progress trail on the left (each tool call as it runs) and the root-cause card on the right, with a \"figures verified\" badge.",
-        say: "It checks whether the spike is real before it explains it. It isn't: four planner overrides from 2 April, due for review on 30 April, are still inflating the feed. The real risk is DIFOT, which collapsed in the same weeks while stores still had stock.",
-        click: "Scroll to What we tested: market, price, timing, promotion, competitor and supply, each with a verdict.",
-        proof: ["Overrides DOV-26-0415 to 0418 (x1.35 to x2.20), Sam Patel, review 30 Apr, still active", "Crawler DIFOT down to 54% in week 18"],
+        show: "The root-cause card at High confidence with a \"figures verified\" badge: reported demand against POS, the four overrides, and DIFOT falling in the same weeks.",
+        say: "The spike isn't real. Four planner overrides entered on 2 April for a Kimberly-Clark TV campaign, due for review on 30 April, are still inflating the feed. The tills barely moved. Supply ordered against the inflated number, and that's when DIFOT collapsed, so some of the misses we'd want to blame on Kimberly-Clark are ours.",
+        click: "Scroll to What we tested, then open Huggies and click Prepare supplier meeting.",
+        proof: ["Reported demand +73.9% vs POS +3.7%, weeks 15-18", "Overrides DOV-26-0415 to 0418 (x1.35 to x2.20), Sam Patel, review 30 Apr, still active", "Crawler DIFOT down to 54% in week 18"],
       },
       {
-        title: "Ask anything, then ask why",
-        route: "/agent",
-        show: "The Category Agent: Look up / Investigate. A lookup goes to the Analyst over the category semantic view; a brand \"why\" goes to the investigator.",
-        say: "Ask it a plain question and it writes the SQL against a governed semantic view, comparing the same weeks of each year. Ask it why, and it switches to the investigator.",
-        click: "Ask \"Top 5 brands by revenue growth this year\", then \"Why is Bugaboo down on last year?\".",
-        proof: ["Bugaboo -15.7% (AUD -445K) vs rest of Prams & Strollers +2.3%: volume, not price"],
-      },
-      {
-        title: "Size the asks",
-        route: `/negotiate?q=${q("Build a negotiation brief for our Huggies meeting with Kimberly-Clark.")}`,
-        show: "The Negotiation Brief: each ask with opening, target and walk-away values, the gives, other levers and guardrails, saved as a DRAFT.",
-        say: "Each ask is sized from the data. And it's honest: where the DIFOT misses were our own override-sized orders, it offers to waive the credit instead of claiming it. That earns credibility in the room.",
-        click: "Approve it for the meeting; it moves from DRAFT to approved.",
-      },
-      {
-        title: "Show what context changes",
-        route: "/ontology",
-        show: "The Ontology page: one question asked of the same agent three times over the same semantic view, alone, with the Business Ontology, and with the ontology plus Cortex Sense, checked against an answer worked out from the base tables.",
-        say: "Same model, same data, same question. The only thing that changes is the context. Without it the agent compares a part year with a full year and says every brand shrank. The ontology brings the like-for-like rule; Cortex Sense adds the caveat that the Huggies class rows double count the orders.",
-        click: "Ask \"Which brands are growing fastest this year?\", then \"What is the Huggies DIFOT this year, and how many orders was that?\".",
-        proof: ["Semantic view alone: Nuna -11.0%; with the ontology: Nuna +2.9% like-for-like", "Huggies DIFOT 93.7% on 5,222 orders, only with Cortex Sense"],
+        title: "Prepare the supplier meeting",
+        route: "/meeting/Huggies",
+        show: "The Supplier Meeting, one page in three steps: the Facts and the battlecard's arguments (every figure checked against the evidence), the Plan (a brief sized at the stance you pick), and Approve, with past meetings. The Meeting pack prints it.",
+        say: "Now the meeting writes itself from what we found. The margin gap and the promo co-funding are the asks, and co-funded promotions are how we win the guest shoppers back. And it's honest: three quarters of the DIFOT misses were our own override-sized orders, so the brief offers to waive them instead of claiming them. None of this is the model's taste. The arguments and the brief are written to your Head of Department's negotiation SOP, and every ask is sized by their negotiation rules: how much the target keeps at each stance, where to walk away, how much co-funding to open with. Both live in Settings, versioned, with who changed what. Change the SOP and the next battlecard follows it.",
+        click: "Point at \"Arguments written to your Head of Department's SOP\" and the rules line under the stance picker. Pick Balanced and build the brief; approve it in step 3. Open Settings from either link to show the SOP and the Negotiation rules tab. Open the Meeting pack to print it.",
+        proof: ["FY2026 to date: margin 37.6% vs 38.8% for the category", "Supplier co-funds 50% of promotional discount (AUD 28,480 given so far this year)", "DIFOT since 6 April: 75.2% of misses are our ordering, offered back as a give", "Balanced: target keeps 60% of each opening ask, walk away below 25% (Settings > Negotiation rules)", "Written to the Supplier negotiation prep SOP (Settings > SOP & Templates)"],
       },
     ],
     close:
-      "You walk into ten o'clock knowing the spike isn't in sales, that part of the DIFOT miss was ours, and with asks you can defend line by line. That took ten minutes, not two days.",
+      "You walk into ten o'clock knowing why Huggies is down (guest shoppers, not price or supply), that the spike isn't in sales, that most of the DIFOT miss was ours, and with asks you can defend line by line. That took ten minutes, not two days.",
     snowflake: [
       "Cortex Agents (Brand Investigator, Negotiation Brief) with procedure tools",
-      "Cortex Analyst over a semantic view",
-      "Business Ontology and Cortex Sense as agent context",
+      "Cortex AI writing the battlecard to your SOP, with every figure checked against the evidence",
+      "House rules in Snowflake tables: a versioned SOP and negotiation rules with an audit trail",
       "Dynamic tables over POS",
       "Answer verification against tool output",
       "Snowflake App Runtime",
     ],
     prep: [
       "Category Agent: start with New so the thread is empty.",
-      "Negotiation Brief: each build supersedes the brand's earlier drafts. Approve only if you want the approved state shown next time.",
+      "Supplier Meeting: each brief build supersedes the brand's earlier drafts. Approve only if you want the approved state shown next time.",
+      "If you edit the SOP or a negotiation rule live, change it back afterwards (the history keeps both edits). An edited SOP rewrites the battlecard the next time the meeting page opens.",
+      "If there's time after the meeting: the Ontology page shows the same question answered with and without the Business Ontology and Cortex Sense.",
     ],
     connects: "The same Huggies override shows up for the Supply Chain Planner on the demand page and in the DIFOT Investigator.",
   },
@@ -492,14 +496,24 @@ export function stepPath(route: string): string {
   try { return decodeURIComponent(p); } catch { return p; }
 }
 
-/** The step of `track` a page is on: the current step if it matches, else the
- *  first step whose path is this page. -1 when the page is not in the track. */
-export function stepForPath(track: DemoTrack, pathname: string, current = -1): number {
+/** The step of `track` a page is on. Two steps can share a page (/agent asks
+ *  the decline, then the spike), so a page's ?q= picks the step that asks that
+ *  question; otherwise the current step if it is on this page; otherwise the
+ *  first step on it. -1 when the page is not in the track. The brand page's
+ *  Investigate links carry ?q=, so a presenter who clicks them lands on the
+ *  right step without touching Next. */
+export function stepForPath(track: DemoTrack, pathname: string, current = -1, search = ""): number {
   let path = pathname;
   try { path = decodeURIComponent(pathname); } catch { /* keep raw */ }
   path = path.replace(/\/+$/, "") || "/";
-  if (current >= 0 && stepPath(track.steps[current]?.route ?? "") === path) return current;
-  return track.steps.findIndex((s) => stepPath(s.route) === path);
+  const onPage = track.steps.map((_, i) => i).filter((i) => stepPath(track.steps[i].route) === path);
+  if (!onPage.length) return -1;
+  const q = new URLSearchParams(search).get("q");
+  if (q !== null) {
+    const asked = onPage.find((i) => new URLSearchParams(track.steps[i].route.split("?")[1] ?? "").get("q") === q);
+    if (asked !== undefined) return asked;
+  }
+  return current >= 0 && onPage.includes(current) ? current : onPage[0];
 }
 
 /** A step's route with the persona tag, so a shared page (/agent) keeps the

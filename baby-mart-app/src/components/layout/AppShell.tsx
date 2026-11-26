@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Swords, Bot, Truck, Handshake, FlaskConical,
+  LayoutDashboard, ShoppingCart, Baby, Car, Shirt, Utensils, Tag, Bot, Truck, Handshake, FlaskConical,
   AlertTriangle, ClipboardList, ChevronDown, Store, Warehouse, Users, Megaphone, Gift,
   DollarSign, Sparkles, TrendingUp, PackageCheck, UserCheck, ArrowRightFromLine, BarChart3,
   Scale, Clock, Layers, SlidersHorizontal, Lightbulb, Boxes, Wallet,
@@ -332,9 +332,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <NavItem key={brand.slug} href={`/brand/${encodeURIComponent(brand.slug)}`} icon={Tag} label={brand.name} color="blue" />
                   ))}
                   <SectionLabel>AI Tools</SectionLabel>
-                  <NavItem href="/battlecards" icon={Swords} label="Battlecards" color="blue" />
+                  <NavItem href="/meeting" icon={Handshake} label="Supplier Meeting" color="blue" />
                   <NavItem href="/agent" icon={Bot} label="Category Agent" color="blue" />
-                  <NavItem href="/negotiate" icon={Handshake} label="Negotiation Brief" color="blue" />
                   <SectionLabel>Vendor Economics</SectionLabel>
                   <NavItem href="/vendor/profitability" icon={DollarSign} label="Vendor Profitability" color="blue" />
                   <NavItem href="/vendor/scorecard" icon={Scale} label="Vendor Scorecard" color="blue" />

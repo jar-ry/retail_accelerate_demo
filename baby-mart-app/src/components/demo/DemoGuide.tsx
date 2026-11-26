@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, ChevronsRight, Mic, MousePointerClick, Presentation, X } from "lucide-react";
 import { useDemoMode } from "@/lib/demo/demo-mode";
 import { stepForPath, stepHref, trackById, type DemoPersona } from "@/lib/demo/tracks";
@@ -21,7 +21,11 @@ export function DemoGuide({ persona }: { persona: DemoPersona }) {
   const demo = useDemoMode();
   const pathname = usePathname();
   const track = trackById(demo.track) ?? trackById(persona)!;
-  const onStep = stepForPath(track, pathname, demo.step);
+  // The query tells apart two steps on one page (/agent: decline, then spike).
+  // Only read once demo mode is on, which is client-side only.
+  const search = demo.on && typeof window !== "undefined" ? window.location.search : "";
+  const onStep = stepForPath(track, pathname, demo.step, search);
+  const leaving = useRef(false);
   const i = onStep >= 0 ? onStep : Math.min(demo.step, track.steps.length - 1);
   const step = track.steps[i];
   const last = i === track.steps.length - 1;
@@ -29,7 +33,9 @@ export function DemoGuide({ persona }: { persona: DemoPersona }) {
   // Keep the stored step on the page being shown, and pin the track the first
   // time demo mode is used from the sidebar toggle.
   useEffect(() => {
-    if (!demo.on) return;
+    // Next/Back already stored the step and is reloading onto its page: don't
+    // re-match the page being left, or the stored step is overwritten.
+    if (!demo.on || leaving.current) return;
     if (!demo.track) demo.present(track.id, Math.max(onStep, 0));
     else if (onStep >= 0 && onStep !== demo.step) demo.goTo(onStep);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -38,6 +44,7 @@ export function DemoGuide({ persona }: { persona: DemoPersona }) {
   if (!demo.on) return null;
 
   const go = (n: number) => {
+    leaving.current = true;
     demo.goTo(n);
     window.location.href = stepHref(track, track.steps[n]);
   };

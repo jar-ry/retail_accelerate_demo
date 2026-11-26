@@ -93,10 +93,10 @@ export default function BrandDetailPage() {
             <Package className="w-4 h-4" />
             SKU Performance
           </Link>
-          <Link href={`/brand/${encodeURIComponent(brand)}/battlecard`}
+          <Link href={`/meeting/${encodeURIComponent(brand)}`}
             className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800">
             <Sparkles className="w-4 h-4" />
-            Generate Battlecard
+            Prepare supplier meeting
           </Link>
         </div>
       </div>

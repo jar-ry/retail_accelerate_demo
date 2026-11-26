@@ -1,78 +1,48 @@
-import { querySnowflake } from "@/lib/snowflake";
+import { querySnowflakeWithBinds } from "@/lib/snowflake";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyCitations } from "@/lib/ai/grounded";
+import { cardText } from "@/lib/meeting";
 
-// Battlecards are produced by BABY_MART_DEMO.AI.GENERATE_BATTLECARD, which
-// queries the analytics tables for the real figures and uses CORTEX.COMPLETE
-// only for the negotiation wording. The same procedure is registered as a tool
-// on the Cortex Agents, so the chat and this page cannot disagree.
+// POST /api/battlecard/generate {brand}
 //
-// Previously this route returned hardcoded literals for Huggies and, for every
-// other brand, called COMPLETE with a prompt containing no data at all -- so
-// margins, DIFOT and dollar values were invented.
+// The battlecard is the Facts step of the Supplier Meeting page
+// (/meeting/<brand>). BABY_MART_DEMO.AI.GENERATE_BATTLECARD (sql/09) reads the
+// negotiation evidence (sql/48) -- the same figures the brief is sized from --
+// and uses CORTEX.COMPLETE only to word the arguments. Every number in that
+// wording is checked here against the evidence (src/lib/ai/grounded.ts), and the
+// page shows any that do not match rather than passing them silently.
 
-// Snowflake string literals honour backslash escapes, so doubling quotes alone
-// lets a value ending in \' close the literal. Escape the backslash first.
-function sqlLiteral(value: string): string {
-  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
-}
+type Row = Record<string, unknown>;
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const brand: string = body.brand || "Huggies";
-    const category: string = body.category || "";
+    const body = await request.json().catch(() => ({}));
+    const brand = String(body.brand ?? "").trim().slice(0, 100);
+    if (!brand) return NextResponse.json({ error: "No brand given." }, { status: 400 });
 
-    const sql = `CALL BABY_MART_DEMO.AI.GENERATE_BATTLECARD(${sqlLiteral(brand)}, ${
-      category ? sqlLiteral(category) : "NULL"
-    })`;
-
-    const rows = await querySnowflake(sql);
-    const raw = rows.length > 0 ? rows[0].GENERATE_BATTLECARD : null;
-
-    if (!raw) {
-      return NextResponse.json(
-        { error: `No battlecard returned for ${brand}.` },
-        { status: 502 },
-      );
-    }
-
+    const rows = (await querySnowflakeWithBinds("CALL BABY_MART_DEMO.AI.GENERATE_BATTLECARD(?)", [brand])) as Row[];
+    const raw = rows.length ? Object.values(rows[0])[0] : null;
+    if (!raw) return NextResponse.json({ error: `No battlecard returned for ${brand}.` }, { status: 502 });
     const result = typeof raw === "string" ? JSON.parse(raw) : raw;
-
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 404 });
-    }
+    if (result.error) return NextResponse.json({ error: result.error }, { status: 404 });
 
     const card = result.card;
     if (!card) {
-      // The model returned something that wasn't valid JSON; card_raw has it.
-      console.warn(
-        `Battlecard narrative failed to parse for ${brand}: ${String(
-          result.card_raw,
-        ).slice(0, 300)}`,
-      );
-      return NextResponse.json(
-        { error: "The battlecard narrative could not be generated. Please retry." },
-        { status: 502 },
-      );
+      console.warn(`Battlecard wording failed to parse for ${brand}: ${String(result.card_raw).slice(0, 300)}`);
+      return NextResponse.json({ brand: result.brand, category: result.category, evidence: result.metrics,
+        error: "The battlecard's arguments could not be written. Please retry." }, { status: 502 });
     }
-
-    // Flatten into the shape the battlecard page expects, keeping the source
-    // metrics so the UI (or a reviewer) can trace any figure back to the data.
-    return NextResponse.json({
-      brand: result.brand,
-      category: result.category,
+    const out = {
       key_arguments: card.key_arguments ?? null,
+      negotiation_approach: card.negotiation_approach ?? null,
       incentives: card.incentives ?? null,
       pressures: card.pressures ?? null,
-      negotiation_approach: card.negotiation_approach ?? null,
-      total_addressable: card.total_addressable ?? null,
-      sellthrough: card.sellthrough ?? "",
-      switching: card.switching ?? "",
-      summary: card.summary ?? "",
-      metrics: result.metrics ?? null,
+    };
+    return NextResponse.json({
+      brand: result.brand, category: result.category, period: result.period, evidence: result.metrics, sop: result.sop ?? null,
+      ...out, check: verifyCitations(result.metrics, [], cardText(out)),
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
   }
 }
